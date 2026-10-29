@@ -208,6 +208,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 }
 .move-ratings li:hover, .move-ratings li.is-hover { background: var(--bg); }
 .move-ratings .san { font-weight: 600; }
+.move-ratings .star { color: #d4a500; }
 .move-ratings .muted { color: var(--muted); font-size: 12px; }
 .move-ratings .score { font-variant-numeric: tabular-nums; }
 .move-ratings .win { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; }

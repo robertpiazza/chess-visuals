@@ -15,6 +15,7 @@ const FILES = 'abcdefgh';
 
 const RING_IN = 40, RING_OUT = 48;
 const DEST_IN = 22, DEST_OUT = 31;
+const STAR_PATH = 'M 0 -9 L 2.6 -3.1 9 -2.8 4 1.3 5.6 7.5 0 4 -5.6 7.5 -4 1.3 -9 -2.8 -2.6 -3.1 Z';
 
 function el(tag, attrs = {}, parent) {
   const node = document.createElementNS(NS, tag);
@@ -128,7 +129,7 @@ export class BoardView {
   }
 
   // state: { pieces: chess.board(), orientation, lastMove, checkSq, selected,
-  //          pieceRings, bestFrom, destinations, plainTargets, highlight }
+  //          pieceRings, destinations, plainTargets, highlight }
   render(state) {
     this.orientation = state.orientation;
     for (const layer of Object.values(this.layers)) {
@@ -163,7 +164,7 @@ export class BoardView {
     }
   }
 
-  drawRings({ pieceRings, bestFrom, selected }) {
+  drawRings({ pieceRings, selected }) {
     if (!pieceRings) return;
     for (const [sq, summary] of pieceRings) {
       const [x, y] = this.squareOrigin(sq);
@@ -183,8 +184,9 @@ export class BoardView {
           class: `seg cls-${m.cls}`,
         }, g);
       });
-      if (sq === bestFrom) {
-        el('path', { d: 'M 0 -9 L 2.6 -3.1 9 -2.8 4 1.3 5.6 7.5 0 4 -5.6 7.5 -4 1.3 -9 -2.8 -2.6 -3.1 Z', transform: `translate(${x + 88} ${y + 12})`, class: 'best-star' }, g);
+      // Star every piece that has at least one move rated Best.
+      if (summary.best.cls === 'best') {
+        el('path', { d: STAR_PATH, transform: `translate(${x + 88} ${y + 12})`, class: 'best-star' }, g);
       }
     }
   }
@@ -226,6 +228,9 @@ export class BoardView {
         el('circle', { cx, cy, r: DEST_IN - 1, class: 'dest-disc' }, g);
         el('path', { d: arcPath(cx, cy, DEST_IN, DEST_OUT, 0, Math.PI * 2), class: 'dest-track' }, g);
         el('path', { d: arcPath(cx, cy, DEST_IN, DEST_OUT, 0, Math.max(0.05, m.win / 100 * Math.PI * 2)), class: 'dest-arc' }, g);
+      }
+      if (m.cls === 'best') {
+        el('path', { d: STAR_PATH, transform: `translate(${x + 86} ${y + 14}) scale(1.2)`, class: 'best-star' }, g);
       }
       const label = formatScore(m.score);
       const w = 10 + label.length * 10;

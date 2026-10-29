@@ -7,11 +7,12 @@ A browser chess trainer for standard chess. On your turn, every one of your piec
 **Rings on your pieces (nothing selected)**
 - Each piece gets a pie ring with one slice per legal move, sorted best to worst clockwise from 12 o'clock.
 - Slice colour is the move's quality: green Best, lime Good, yellow Inaccuracy, orange Mistake, red Blunder.
-- A ★ marks the piece that has the best move in the position.
+- A ★ marks every piece that has at least one move rated Best (the top move, plus any within 2 win% points of it).
 - A faint grey ring means the piece has no legal moves.
 
 **Selected piece**
 - Each target square shows a disc tinted by the move's quality and an arc filled to your winning chance after that move.
+- Targets rated Best also get a ★, as do their rows in the side panel.
 - The label under it is the engine score from your side (+1.0 is a pawn up for you, `#3` is mate in 3).
 - The side panel lists the piece's moves with SAN, class, score and win %. Hover a row to highlight the square; click a row to play it.
 - Promotion shows a picker with each choice rated.

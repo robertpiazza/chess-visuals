@@ -205,14 +205,13 @@ function checkSquare() {
 function render() {
   const human = humanToMove();
   const ready = analysis && analysis.fen === game.fen() && analysis.ratings.size > 0;
-  let pieceRings = null, bestFrom = null, destinations = null, plainTargets = null;
+  let pieceRings = null, destinations = null, plainTargets = null;
 
   if (human && ready && settings.showRings) {
     pieceRings = new Map();
     for (const row of game.board()) for (const p of row) {
       if (p && p.color === game.turn()) pieceRings.set(p.square, analysis.summary.get(p.square) ?? null);
     }
-    bestFrom = [...analysis.ratings.values()].find(m => m.rank === 0)?.from ?? null;
   }
   if (selected) {
     const summary = ready ? analysis.summary.get(selected) : null;
@@ -227,7 +226,6 @@ function render() {
     checkSq: checkSquare(),
     selected,
     pieceRings,
-    bestFrom,
     destinations,
     plainTargets,
     highlight: hoverSq,
@@ -254,7 +252,7 @@ function renderPieceCard() {
     const li = document.createElement('li');
     if (m.to === hoverSq) li.classList.add('is-hover');
     const cls = CLASSES.find(c => c.id === m.cls);
-    li.innerHTML = `<span class="dot cls-${m.cls}"></span><span><span class="san">${sans.get(m.uci) ?? m.uci}</span> <span class="muted">${cls.label}</span></span><span class="score">${formatScore(m.score)}</span><span class="win">${Math.round(m.win)}%</span>`;
+    li.innerHTML = `<span class="dot cls-${m.cls}"></span><span><span class="san">${sans.get(m.uci) ?? m.uci}</span>${m.cls === 'best' ? ' <span class="star">★</span>' : ''} <span class="muted">${cls.label}</span></span><span class="score">${formatScore(m.score)}</span><span class="win">${Math.round(m.win)}%</span>`;
     li.title = `${cls.label}: winning chance ${Math.round(m.win)}% (${m.loss.toFixed(1)} points below the best move)`;
     li.addEventListener('mouseenter', () => { hoverSq = m.to; render(); });
     li.addEventListener('mouseleave', () => { hoverSq = null; render(); });
