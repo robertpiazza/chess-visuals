@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chess Visuals</title>
+  <meta name="description" content="Play chess with every piece showing how good its moves are, rated by an engine.">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Chess Visuals</h1>
+    <p class="tagline">Every piece shows how good its moves are. Select one to see each move rated.</p>
+  </header>
+
+  <main class="layout">
+    <section class="board-area">
+      <div class="evalbar" id="evalbar" title="Engine evaluation (White's side)">
+        <div class="evalbar-fill" id="evalbar-fill"></div>
+        <span class="evalbar-label" id="evalbar-label">0.0</span>
+      </div>
+      <div class="board-wrap" id="board-wrap">
+        <div class="promo" id="promo" hidden></div>
+        <div class="banner" id="banner" hidden></div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="status" id="status">Loading engine…</div>
+
+      <div class="card">
+        <div class="row">
+          <label for="mode">Game</label>
+          <select id="mode">
+            <option value="w">Play White vs computer</option>
+            <option value="b">Play Black vs computer</option>
+            <option value="both">Both sides (analysis)</option>
+          </select>
+        </div>
+        <div class="buttons">
+          <button id="new-game" class="primary">New game</button>
+          <button id="undo">Undo</button>
+          <button id="flip">Flip</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <label for="strength">Computer strength <output id="strength-out"></output></label>
+          <input type="range" id="strength" min="0" max="20" step="1">
+        </div>
+        <div class="row">
+          <label for="depth">Rating depth <output id="depth-out"></output></label>
+          <input type="range" id="depth" min="6" max="20" step="1">
+        </div>
+        <label class="check"><input type="checkbox" id="show-rings"> Rings on my pieces</label>
+        <label class="check"><input type="checkbox" id="show-dests"> Ratings on moves of the selected piece</label>
+        <div class="engine-name" id="engine-name"></div>
+      </div>
+
+      <div class="card legend">
+        <div class="legend-items" id="legend"></div>
+        <p class="hint">Ring around a piece: one slice per legal move, best to worst going clockwise from the top. ★ marks the piece with the best move. On a selected piece's targets, the arc fills to your winning chance after that move; the number is the engine score from your side.</p>
+      </div>
+
+      <div class="card" id="piece-card" hidden>
+        <h2 id="piece-title">Moves</h2>
+        <ol class="move-ratings" id="piece-moves"></ol>
+      </div>
+
+      <div class="card">
+        <h2>Moves played</h2>
+        <ol class="history" id="history"></ol>
+      </div>
+
+      <details class="card">
+        <summary>Load position (FEN)</summary>
+        <div class="fen-row">
+          <input id="fen" type="text" spellcheck="false" aria-label="FEN">
+          <button id="load-fen">Load</button>
+        </div>
+      </details>
+    </aside>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
