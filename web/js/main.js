@@ -292,13 +292,18 @@ function render() {
   let arrows = [];
 
   if (human && ready && settings.showRings) {
+    // With a piece selected, only its ring stays, to cut clutter.
+    const show = sq => !selected || sq === selected;
     pieceRings = new Map();
     for (const row of game.board()) for (const p of row) {
-      if (p && p.color === game.turn()) pieceRings.set(p.square, analysis.summary.get(p.square) ?? null);
+      if (p && p.color === game.turn() && show(p.square)) pieceRings.set(p.square, analysis.summary.get(p.square) ?? null);
     }
     if (icons) {
       pieceIcons = new Map();
-      for (const [uci, icon] of icons) if (!pieceIcons.has(uci.slice(0, 2))) pieceIcons.set(uci.slice(0, 2), icon);
+      for (const [uci, icon] of icons) {
+        const from = uci.slice(0, 2);
+        if (show(from) && !pieceIcons.has(from)) pieceIcons.set(from, icon);
+      }
     }
   }
   if (selected) {
