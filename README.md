@@ -118,3 +118,7 @@ Pushing to `main` runs the tests and deploys `web/` to the `gh-pages` branch (`.
 - [chess.js](https://github.com/jhlywa/chess.js) 1.4.0, BSD-2-Clause (`web/vendor/chess.js.LICENSE`).
 - Piece images: Colin M.L. Burnett's "cburnett" set (GPLv2+ / BSD / GFDL), taken from [chessground](https://github.com/lichess-org/chessground).
 - Win% curve and class idea from [Lichess](https://lichess.org).
+
+## Link previews
+
+`web/index.html` carries Open Graph and Twitter card tags, so a shared link shows a title, description and `web/og-image.png` (1200×630: a board with rated rings next to the title and main features). The tags point at `https://robertpiazza.com/chess-visuals/`; change `og:url`, `og:image`, `twitter:image` and the canonical link if the site moves.
