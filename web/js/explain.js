@@ -36,29 +36,39 @@ export function sanLine(fen, ucis) {
 const lowerFirst = s => s[0].toLowerCase() + s.slice(1);
 
 // Does the engine's own line back the tactic up: a mate, or at least two
-// pawns of material won by the end of the line. If the line stops right
-// after one of our captures and the capturing piece can be taken back, that
-// piece is counted as lost, so a line ending mid-exchange isn't a win.
-export function lineWins(board, rating) {
+// pawns of material won in the moves right after it. `at` is the index in the
+// line of the move that creates the tactic (0 for the move itself, 2 for our
+// follow-up). Material is checked after each of the opponent's next four
+// replies, so recaptures are counted, and the best of those counts. Looking
+// only at the end of a long engine line would let later, unrelated trades
+// hide a fork that clearly won something.
+export function lineWins(board, rating, at = 0) {
   if (rating.score.mate != null) return rating.score.mate > 0;
   const us = board[sqIndex(rating.uci.slice(0, 2))].color;
   const start = materialBalance(board, us);
+  const window = at + 8;
   let b = board;
-  let lastCapture = null;
+  let best = -Infinity;
   try {
-    for (const uci of rating.pv) {
+    rating.pv.slice(0, window).forEach((uci, i) => {
       const to = sqIndex(uci.slice(2, 4));
-      lastCapture = b[to] ? to : null;
+      const captured = b[to];
       b = applyUci(b, uci);
-    }
+      if (i <= at) return;
+      // Settled after the opponent's reply.
+      if (i % 2 === 1) best = Math.max(best, materialBalance(b, us));
+      // A line that stops on our capture: count the piece as lost if it can
+      // simply be taken back.
+      else if (i === Math.min(rating.pv.length, window) - 1) {
+        let end = materialBalance(b, us);
+        if (captured && enPrise(b, to)) end -= VALUE[b[to].type];
+        best = Math.max(best, end);
+      }
+    });
   } catch {
     return false;
   }
-  let end = materialBalance(b, us);
-  if (lastCapture != null && b[lastCapture].color === us && enPrise(b, lastCapture)) {
-    end -= VALUE[b[lastCapture].type];
-  }
-  return end - start >= 2;
+  return best - start >= 2;
 }
 
 // The forced tactic a move carries, if any: created by the move itself, or
@@ -74,14 +84,13 @@ export function forcedTactic(fen, rating) {
   const others = motifs.filter(m => m.id !== 'pin');
   const now = others.length && lineWins(board, rating) ? others[0] : pin;
   if (now) return { ...TACTIC_ICONS[now.id], id: now.id, when: 'now', motif: now };
-  if (!lineWins(board, rating)) return null;
   const [, reply, follow] = rating.pv;
   if (!reply || !follow) return null;
   try {
     const b2 = applyUci(applyUci(board, rating.uci), reply);
     if (b2[sqIndex(follow.slice(0, 2))]?.color !== board[sqIndex(rating.uci.slice(0, 2))].color) return null;
     const later = motifsOfMove(b2, follow).find(m => TACTIC_ICONS[m.id]);
-    if (later) return { ...TACTIC_ICONS[later.id], id: later.id, when: 'next', motif: later, line: [rating.uci, reply, follow] };
+    if (later && lineWins(board, rating, 2)) return { ...TACTIC_ICONS[later.id], id: later.id, when: 'next', motif: later, line: [rating.uci, reply, follow] };
   } catch {
     return null;
   }

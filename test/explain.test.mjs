@@ -103,3 +103,12 @@ test('regression: rook on h8 after ...g6 Bb2 is not trapped (Black can block)', 
   const r = rateMoves([{ uci: 'c2c4', score: { cp: 40 }, pv: ['c2c4', 'g7g6', 'c1b2', 'f8g7'] }]);
   assert.equal(forcedTactic(fen, r.get('c2c4')), null);
 });
+
+test('regression: Nxc2+ fork keeps its icon even when the long engine line gives material back', () => {
+  // Black to move; Nxc2+ forks king e1 and rook a1 (c2 is covered by Bf5).
+  const fen = 'r2qkbnr/pp2pppp/8/3p1b2/1n1P4/P1N2N2/1PP1QPPP/R1B1KB1R b KQkq - 0 7';
+  // Black wins the queen at once, White wins it back seven plies later.
+  const r = rateMoves([{ uci: 'b4c2', score: { cp: 40 },
+    pv: ['b4c2', 'e2c2', 'f5c2', 'f1b5', 'd8d7', 'b5d7', 'e8d7', 'c3d5', 'g8f6', 'd5f6'] }]);
+  assert.equal(forcedTactic(fen, r.get('b4c2'))?.id, 'fork');
+});
