@@ -297,3 +297,5 @@ summary { cursor: pointer; font-size: 14px; color: var(--muted); }
 .reasons li.empty-row { display: block; }
 .legend-icon svg { width: 13px; height: 13px; display: block; }
 #tactic-legend { display: inline-flex; gap: 3px; vertical-align: middle; }
+.tactic-badge.is-unsound circle { fill: #dc2626; }
+.legend-icon.is-unsound { background: #dc2626; }

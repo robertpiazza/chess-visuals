@@ -19,6 +19,7 @@ export const TACTIC_ICONS = {
 };
 
 const SOUND = new Set(['best', 'good']);
+const CLASSES_LABEL = { best: 'Best', good: 'Good', inaccuracy: 'an Inaccuracy', mistake: 'a Mistake', blunder: 'a Blunder' };
 
 export function sanLine(fen, ucis) {
   const chess = new Chess(fen);
@@ -73,24 +74,47 @@ export function lineWins(board, rating, at = 0) {
 
 // The forced tactic a move carries, if any: created by the move itself, or
 // by our follow-up in the engine's line after the opponent's best reply.
-// Only sound moves (rated Best or Good) qualify, and the engine's line has to
-// show the tactic paying off: winning material or mating. An immediate pin
-// counts as soon as it exists, since the pin itself is the result.
+// A sound tactic (`sound: true`) needs a move rated Best or Good and an
+// engine line that shows it paying off: winning material or mating. An
+// immediate pin counts as soon as it exists, since the pin itself is the
+// result. A tactic the move creates right away that fails either test is
+// still returned with `sound: false` and a `reason`, so the board can mark it
+// as a tempting idea that doesn't work.
 export function forcedTactic(fen, rating) {
-  if (!SOUND.has(rating.cls)) return null;
   const { board } = parseFen(fen);
   const motifs = motifsOfMove(board, rating.uci).filter(m => TACTIC_ICONS[m.id]);
   const pin = motifs.find(m => m.id === 'pin');
   const others = motifs.filter(m => m.id !== 'pin');
-  const now = others.length && lineWins(board, rating) ? others[0] : pin;
-  if (now) return { ...TACTIC_ICONS[now.id], id: now.id, when: 'now', motif: now };
+  const sound = SOUND.has(rating.cls);
+  const wins = others.length > 0 && lineWins(board, rating);
+  const icon = (m, extra) => ({ ...TACTIC_ICONS[m.id], id: m.id, when: 'now', motif: m, sound: true, ...extra });
+
+  if (sound) {
+    const now = wins ? others[0] : pin;
+    if (now) return icon(now);
+    const later = followUpTactic(board, rating);
+    if (later) return later;
+  }
+  const shown = others[0] ?? pin;
+  if (!shown) return null;
+  const label = CLASSES_LABEL[rating.cls] ?? rating.cls;
+  return icon(shown, {
+    sound: false,
+    reason: sound ? 'the engine\'s line doesn\'t win material from it' : `the engine rates the move ${label}`,
+  });
+}
+
+// A tactic on our next move in the engine line, after the opponent's reply.
+function followUpTactic(board, rating) {
   const [, reply, follow] = rating.pv;
   if (!reply || !follow) return null;
   try {
     const b2 = applyUci(applyUci(board, rating.uci), reply);
     if (b2[sqIndex(follow.slice(0, 2))]?.color !== board[sqIndex(rating.uci.slice(0, 2))].color) return null;
     const later = motifsOfMove(b2, follow).find(m => TACTIC_ICONS[m.id]);
-    if (later && lineWins(board, rating, 2)) return { ...TACTIC_ICONS[later.id], id: later.id, when: 'next', motif: later, line: [rating.uci, reply, follow] };
+    if (later && lineWins(board, rating, 2)) {
+      return { ...TACTIC_ICONS[later.id], id: later.id, when: 'next', motif: later, sound: true, line: [rating.uci, reply, follow] };
+    }
   } catch {
     return null;
   }
@@ -109,6 +133,11 @@ export function explainMove(fen, uci, ratings, history = []) {
   const arrows = tactics.flatMap(m => m.arrows.map(a => ({ from: a[0], to: a[1], tone: m.tone })));
 
   const forced = rating ? forcedTactic(fen, rating) : null;
+  if (forced && !forced.sound) {
+    // Draw the tactic that doesn't work in red, matching its badge.
+    for (const a of arrows) if (forced.motif.arrows.some(m => m[0] === a.from && m[1] === a.to)) a.tone = 'bad';
+    notes.push({ tone: 'bad', text: `The ${forced.label.toLowerCase()} is there, but it doesn't pay off: ${forced.reason}` });
+  }
   if (forced?.when === 'next') {
     const sans = sanLine(fen, forced.line);
     notes.push({ tone: 'good', text: `Forces a ${forced.label.toLowerCase()}: after ${sans[1]}, ${sans[2]} — ${lowerFirst(forced.motif.text)}` });
@@ -147,7 +176,7 @@ export function explainMove(fen, uci, ratings, history = []) {
       .filter(m => m.tone === 'good' && !mine.has(m.id))
       .map(m => lowerFirst(m.text));
     const bestForced = forcedTactic(fen, best);
-    if (bestForced?.when === 'next' && !mine.has(bestForced.id)) reasons.unshift(`forces a ${bestForced.label.toLowerCase()}`);
+    if (bestForced?.sound && bestForced.when === 'next' && !mine.has(bestForced.id)) reasons.unshift(`forces a ${bestForced.label.toLowerCase()}`);
     const line = sanLine(fen, best.pv.slice(0, 4)).join(' ');
     comparison = {
       san: bestSan,

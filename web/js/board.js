@@ -9,7 +9,7 @@
 //                  move, and the engine score.
 
 import { formatScore } from './analysis.js';
-import { hasGlyph, glyphMarkup } from './icons.js';
+import { hasGlyph, glyphMarkup, iconTitle } from './icons.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const FILES = 'abcdefgh';
@@ -150,8 +150,9 @@ export class BoardView {
   // (clear of the rank numbers top-left and file letters bottom-right): a
   // pictogram (fork, pin, skewer) or a letter.
   drawIcon(parent, x, y, icon, scale = 1) {
-    const g = el('g', { class: 'tactic-badge', transform: `translate(${x + 14} ${y + 86}) scale(${scale})` }, parent);
-    el('title', {}, g).textContent = `${icon.label} can be forced`;
+    const cls = 'tactic-badge' + (icon.sound === false ? ' is-unsound' : '');
+    const g = el('g', { class: cls, transform: `translate(${x + 14} ${y + 86}) scale(${scale})` }, parent);
+    el('title', {}, g).textContent = iconTitle(icon);
     el('circle', { r: 11 }, g);
     if (hasGlyph(icon)) {
       const glyph = el('g', { transform: 'translate(-8 -8) scale(0.667)' }, g);

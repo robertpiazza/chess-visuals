@@ -33,11 +33,13 @@ export function glyphMarkup(icon) {
   return GLYPHS[icon.glyph];
 }
 
-// A round purple badge for HTML.
+// Purple for a tactic that works; red when it's there but doesn't pay off.
+export function iconTitle(icon) {
+  return icon.sound === false ? `${icon.label} available, but it doesn't pay off` : `${icon.label} can be forced`;
+}
+
 export function badgeHtml(icon) {
-  const title = `${icon.label} can be forced`;
-  if (hasGlyph(icon)) {
-    return `<span class="legend-icon" title="${title}"><svg viewBox="0 0 24 24" aria-hidden="true">${glyphMarkup(icon)}</svg></span>`;
-  }
-  return `<span class="legend-icon" title="${title}">${icon.letter}</span>`;
+  const cls = 'legend-icon' + (icon.sound === false ? ' is-unsound' : '');
+  const inner = hasGlyph(icon) ? `<svg viewBox="0 0 24 24" aria-hidden="true">${glyphMarkup(icon)}</svg>` : icon.letter;
+  return `<span class="${cls}" title="${iconTitle(icon)}">${inner}</span>`;
 }

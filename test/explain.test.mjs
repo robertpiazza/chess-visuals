@@ -38,12 +38,15 @@ test('principles: trade while ahead vs behind', () => {
   assert.ok(pids(tradeBehind, 'f3e5').includes('trade-behind'));
 });
 
-test('forced tactic marker: immediate fork on a sound move only', () => {
+test('forced tactic marker: immediate fork is sound only on a good move', () => {
   const fen = 'r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1';
   const ratings = rateMoves([{ uci: 'b5c7', score: { cp: 500 }, pv: ['b5c7', 'e8d7', 'c7a8'] }, { uci: 'b5d4', score: { cp: 0 } }]);
   assert.equal(forcedTactic(fen, ratings.get('b5c7')).id, 'fork');
   const bad = rateMoves([{ uci: 'b5c7', score: { cp: -500 } }, { uci: 'b5d4', score: { cp: 200 } }]);
-  assert.equal(forcedTactic(fen, bad.get('b5c7')), null);
+  const unsound = forcedTactic(fen, bad.get('b5c7'));
+  assert.equal(unsound.id, 'fork');
+  assert.equal(unsound.sound, false);
+  assert.match(unsound.reason, /Blunder/);
 });
 
 test('forced tactic marker: fork reached through the engine line', () => {
@@ -86,13 +89,14 @@ test('opening lookup and continuations', () => {
   for (const san of ['Bb5', 'Bc4', 'd4', 'Nc3', 'c3']) assert.ok(next.includes(san), san);
 });
 
-test('a fork the engine line does not cash in gets no icon', () => {
+test('a fork the engine line does not cash in gets a red (unsound) icon', () => {
   const fen = 'r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1';
   // Engine line where the rook escapes: no material changes hands.
   const r = rateMoves([{ uci: 'b5c7', score: { cp: 20 }, pv: ['b5c7', 'e8d7', 'c7a8', 'd7c8', 'a8b6', 'c8b7'] }]);
   assert.notEqual(forcedTactic(fen, r.get('b5c7')), null); // knight wins the rook here: still a fork
   const none = rateMoves([{ uci: 'b5c7', score: { cp: 20 }, pv: ['b5c7', 'e8d7'] }]);
-  assert.equal(forcedTactic(fen, none.get('b5c7')), null);
+  assert.equal(forcedTactic(fen, none.get('b5c7')).sound, false);
+  assert.match(forcedTactic(fen, none.get('b5c7')).reason, /doesn't win material/);
 });
 
 test('regression: rook on h8 after ...g6 Bb2 is not trapped (Black can block)', () => {

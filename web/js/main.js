@@ -302,7 +302,8 @@ function render() {
       pieceIcons = new Map();
       for (const [uci, icon] of icons) {
         const from = uci.slice(0, 2);
-        if (show(from) && !pieceIcons.has(from)) pieceIcons.set(from, icon);
+        // A piece shows its working tactic over one that doesn't pay off.
+        if (show(from) && (!pieceIcons.has(from) || (icon.sound && !pieceIcons.get(from).sound))) pieceIcons.set(from, icon);
       }
     }
   }
@@ -313,7 +314,8 @@ function render() {
       if (icons) {
         destIcons = new Map();
         for (const [sq, m] of destinations) {
-          const icon = m.options.map(o => icons.get(o.uci)).find(Boolean);
+          const found = m.options.map(o => icons.get(o.uci)).filter(Boolean);
+          const icon = found.find(i => i.sound) ?? found[0];
           if (icon) destIcons.set(sq, icon);
         }
       }
@@ -392,7 +394,10 @@ function reasonItems(ex) {
   const push = (tone, text, icon) => items.push({ tone, text, icon });
   // Notes come first: a tactic forced later in the line, or the opponent's reply.
   for (const n of ex.notes) push(n.tone, n.text, n.tone === 'good' && ex.forced?.when === 'next' && n === ex.notes[0] ? ex.forced : null);
-  for (const t of ex.tactics) push(t.tone, t.text, TACTIC_ICONS[t.id] ?? null);
+  for (const t of ex.tactics) {
+    const icon = TACTIC_ICONS[t.id] && (ex.forced?.id === t.id ? ex.forced : TACTIC_ICONS[t.id]);
+    push(t.tone, t.text, icon ?? null);
+  }
   for (const p of ex.principles) push(p.tone, p.text, null);
   return items;
 }
