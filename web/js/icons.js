@@ -17,12 +17,11 @@ const GLYPHS = {
   // Magnifying glass, for discovered attacks and checks.
   discovered: `<circle cx="10" cy="10" r="6" fill="none" stroke="#fff" stroke-width="2.2"/>
     <path d="M14.6 14.6L20.5 20.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/>`,
-  // Mousetrap: base plank, curved spring bar cocked back, wedge of cheese.
-  trap: `<rect x="1.5" y="17" width="21" height="4" rx="1" fill="#fff"/>
-    <path d="M9 17C9 10 4 8 3 12.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-    <circle cx="9" cy="16" r="1.8" fill="#fff"/>
-    <path d="M12 16.5h10V9z" fill="#fff"/>
-    <g fill="#7c3aed"><circle cx="17.5" cy="14" r="1.2"/><circle cx="20" cy="12.2" r="0.8"/><circle cx="14.6" cy="15.3" r="0.6"/></g>`,
+  // Birdcage: domed bars on a base, with a hanging ring.
+  trap: `<path d="M5 9a7 6 0 0 1 14 0v10H5z" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M9.5 4.6V19M14.5 4.6V19" stroke="#fff" stroke-width="1.8"/>
+    <path d="M3.5 19.5h17" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+    <circle cx="12" cy="2.8" r="1.4" fill="none" stroke="#fff" stroke-width="1.4"/>`,
 };
 
 export function hasGlyph(icon) {

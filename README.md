@@ -21,7 +21,7 @@ A browser chess trainer for standard chess. On your turn, every one of your piec
 
 ## Tactics and explanations
 
-**Forced-tactic icons.** A purple badge marks moves that force a tactic: a dinner fork for a fork, a push pin for a pin, a kebab skewer for a skewer, a magnifying glass for a discovered attack or check, and a mousetrap for a trapped piece (pictograms in `web/js/icons.js`). A move qualifies when it creates the pattern right away, or when the pattern arrives on your next move in the engine's line after the opponent's best reply (for example, a check that drives the king onto a forking square). Only moves rated Best or Good get a badge, so a fork that loses material doesn't. The badge appears on the target square of the selected piece, in its move list, and on the ring of any piece that has such a move.
+**Forced-tactic icons.** A purple badge marks moves that force a tactic: a dinner fork for a fork, a push pin for a pin, a kebab skewer for a skewer, a magnifying glass for a discovered attack or check, and a cage for a trapped piece (pictograms in `web/js/icons.js`). A move qualifies when it creates the pattern right away, or when the pattern arrives on your next move in the engine's line after the opponent's best reply (for example, a check that drives the king onto a forking square). Only moves rated Best or Good get a badge, so a fork that loses material doesn't. The badge appears on the target square of the selected piece, in its move list, and on the ring of any piece that has such a move.
 
 **Why this move.** Hover a target square, or click a row in the move list, to see:
 - tactics the move creates: forks, pins, skewers, discovered attacks and checks, trapped pieces, captures and threats, plus pieces it leaves hanging;
