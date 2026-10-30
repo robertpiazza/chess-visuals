@@ -197,7 +197,10 @@ export function motifsOfMove(board, uci) {
 
   // Check, and whether it comes from another piece (discovered check).
   const checkers = enemyKing >= 0 ? attackersOf(after, enemyKing, us) : [];
-  if (checkers.length) {
+  if (checkers.length && isMated(after, them)) {
+    const how = checkers.length > 1 ? 'Double check and mate' : checkers[0] !== to ? `Discovered checkmate from the ${label(after, checkers[0])}` : 'Checkmate';
+    motifs.push({ id: 'mate', tone: 'good', text: `${how}: the king has no way out`, arrows: checkers.map(c => [c, enemyKing]) });
+  } else if (checkers.length) {
     const disc = checkers.filter(c => c !== to);
     if (disc.length && checkers.includes(to)) {
       motifs.push({ id: 'double-check', tone: 'good', text: 'Double check: the king must move', arrows: checkers.map(c => [c, enemyKing]) });
@@ -367,6 +370,16 @@ function isTrapped(board, i) {
     if (after[i] && !enPrise(after, i)) return false;
   }
   return true;
+}
+
+// Is `color` checkmated on this board (with `color` to move)?
+function isMated(board, color) {
+  try {
+    const pos = new Position(boardToFen(board, color));
+    return pos.inCheck() && pos.legalMoves().length === 0;
+  } catch {
+    return false;
+  }
 }
 
 // A mating move for `color` if it were `color`'s turn, else null. Searched

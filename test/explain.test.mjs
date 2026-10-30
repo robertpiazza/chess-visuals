@@ -225,3 +225,14 @@ test('a rook behind a passed pawn is not called passive', () => {
   const fen = '6k1/5ppp/8/3P4/8/8/5PPP/R5K1 w - - 0 1';
   assert.ok(!principlesOfMove(parseFen(fen).board, 'a1d1', { fen, history: [] }).some(p => p.id === 'passive'));
 });
+
+test('a mating move says checkmate, not just check', () => {
+  // Back-rank mate: Rb8# with the black king on g8 boxed in by its pawns.
+  const fen = '6k1/5ppp/8/1R6/8/8/5PPP/6K1 w - - 0 1';
+  const ms = motifsOfMove(parseFen(fen).board, 'b5b8');
+  assert.ok(ms.some(m => m.id === 'mate' && m.text === 'Checkmate: the king has no way out'));
+  assert.ok(!ms.some(m => m.id === 'check'));
+  // A plain check stays a check.
+  const chk = '6k1/5p1p/8/1R6/8/8/5PPP/6K1 w - - 0 1';
+  assert.ok(motifsOfMove(parseFen(chk).board, 'b5b8').some(m => m.id === 'check'));
+});
