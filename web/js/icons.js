@@ -1,5 +1,6 @@
 // Pictograms for forced-tactic badges, drawn in a 24×24 box in white on the
-// purple badge. A tactic without a glyph falls back to its letter.
+// badge. Cut-outs use var(--badge-bg) so they match a purple or red badge.
+// A tactic without a glyph falls back to its letter.
 
 const GLYPHS = {
   // Dinner fork: four tines joined into a curved head on a handle.
@@ -19,7 +20,14 @@ const GLYPHS = {
     <path d="M14.6 14.6L20.5 20.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/>`,
   // Flame, for a sound sacrifice.
   sacrifice: `<path d="M12 2c.8 3.6 6 6.2 6 11.6A6 6 0 0 1 6 13.6c0-2.9 1.6-4.8 3-6 .2 2 1.1 3.3 2.4 3.9C11 8.6 11 5.2 12 2z" fill="#fff"/>
-    <path d="M12 21.2a2.7 2.7 0 0 1-2.7-2.7c0-1.7 1.3-2.7 2.7-4.6 1.4 1.9 2.7 2.9 2.7 4.6a2.7 2.7 0 0 1-2.7 2.7z" fill="#7c3aed"/>`,
+    <path d="M12 21.2a2.7 2.7 0 0 1-2.7-2.7c0-1.7 1.3-2.7 2.7-4.6 1.4 1.9 2.7 2.9 2.7 4.6a2.7 2.7 0 0 1-2.7 2.7z" style="fill:var(--badge-bg)"/>`,
+  // Cracked shield, for removing the defender.
+  defender: `<path d="M12 2.5l7.5 2.8v5.9c0 4.8-3.2 8.6-7.5 10.3-4.3-1.7-7.5-5.5-7.5-10.3V5.3z" fill="#fff"/>
+    <path d="M13.2 4.5l-3 5.5 3.3 1.2-2.6 6.5" fill="none" style="stroke:var(--badge-bg)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`,
+  // Cartoon ton weight (tapered body, small handle), for an overloaded piece.
+  overload: `<circle cx="12" cy="5.2" r="2.3" fill="none" stroke="#fff" stroke-width="1.8"/>
+    <path d="M8.6 7.6h6.8l5.6 13.4H3z" fill="#fff"/>
+    <text x="12" y="18.6" text-anchor="middle" font-size="7" font-weight="800" font-family="system-ui, sans-serif" style="fill:var(--badge-bg)">T</text>`,
   // Birdcage: domed bars on a base, with a hanging ring.
   trap: `<path d="M5 9a7 6 0 0 1 14 0v10H5z" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
     <path d="M9.5 4.6V19M14.5 4.6V19" stroke="#fff" stroke-width="1.8"/>

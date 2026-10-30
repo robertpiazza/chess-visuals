@@ -172,3 +172,19 @@ test('pawn breaks: Queen\'s Gambit c4 and King\'s Gambit f4, not 1.e4', () => {
   const start = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
   assert.ok(!principlesOfMove(parseFen(start).board, 'e2e4', { fen: start, history: [] }).some(p => p.id === 'pawn-break'));
 });
+
+test('removing the defender: Bxf6 leaves the d5 rook hanging, unless the recapture guards it again', () => {
+  const rd = '4k3/6p1/5n2/3r2B1/8/8/8/3RK3 w - - 0 1';
+  assert.ok(motifsOfMove(parseFen(rd).board, 'g5f6').some(m => m.id === 'remove-defender' && /guarding the rook on d5/.test(m.text)));
+  // ...Nxf6 retakes and guards d5 again: no removed defender.
+  const retake = '4k3/3n4/5n2/3r2B1/8/8/8/3RK3 w - - 0 1';
+  assert.ok(!motifsOfMove(parseFen(retake).board, 'g5f6').some(m => m.id === 'remove-defender'));
+});
+
+test('overloaded piece: Rb1 leaves the d7 knight guarding both b8 and f6', () => {
+  const fen = '1r2k3/3n4/5n2/6B1/8/2N5/8/R3K3 w - - 0 1';
+  const m = motifsOfMove(parseFen(fen).board, 'a1b1').find(x => x.id === 'overload');
+  assert.equal(m.text, 'Overloads the knight on d7: it alone guards the knight on f6 and rook on b8');
+  const r = rateMoves([{ uci: 'a1b1', score: { cp: 300 }, pv: ['a1b1', 'e8e7', 'b1b8', 'd7b8', 'g5f6'] }]);
+  assert.equal(forcedTactic(fen, r.get('a1b1')).id, 'overload');
+});

@@ -9,14 +9,16 @@ import { formatWhite } from './analysis.js';
 
 // Tactics that get a marker on the board when a move forces them.
 export const TACTIC_ICONS = {
-  fork: { letter: 'F', glyph: 'fork', label: 'Fork' },
-  pin: { letter: 'P', glyph: 'pin', label: 'Pin' },
-  skewer: { letter: 'S', glyph: 'skewer', label: 'Skewer' },
-  discovered: { letter: 'D', glyph: 'discovered', label: 'Discovered attack' },
-  'disc-check': { letter: 'D', glyph: 'discovered', label: 'Discovered check' },
-  'double-check': { letter: 'D', glyph: 'discovered', label: 'Double check' },
-  trap: { letter: 'T', glyph: 'trap', label: 'Trapped piece' },
-  sacrifice: { letter: '!', glyph: 'sacrifice', label: 'Sacrifice' },
+  fork: { letter: 'F', glyph: 'fork', label: 'Fork', noun: 'a fork' },
+  pin: { letter: 'P', glyph: 'pin', label: 'Pin', noun: 'a pin' },
+  skewer: { letter: 'S', glyph: 'skewer', label: 'Skewer', noun: 'a skewer' },
+  discovered: { letter: 'D', glyph: 'discovered', label: 'Discovered attack', noun: 'a discovered attack' },
+  'disc-check': { letter: 'D', glyph: 'discovered', label: 'Discovered check', noun: 'a discovered check' },
+  'double-check': { letter: 'D', glyph: 'discovered', label: 'Double check', noun: 'a double check' },
+  trap: { letter: 'T', glyph: 'trap', label: 'Trapped piece', noun: 'a trapped piece' },
+  sacrifice: { letter: '!', glyph: 'sacrifice', label: 'Sacrifice', noun: 'a sacrifice' },
+  'remove-defender': { letter: 'R', glyph: 'defender', label: 'Removing the defender', noun: 'a removed defender' },
+  overload: { letter: 'O', glyph: 'overload', label: 'Overloaded piece', noun: 'an overloaded piece' },
 };
 
 // Threats that, combined with a developing or improving move, gain a tempo.
@@ -51,6 +53,7 @@ export function sanLine(fen, ucis) {
 }
 
 const lowerFirst = s => s[0].toLowerCase() + s.slice(1);
+const upperFirst = s => s[0].toUpperCase() + s.slice(1);
 
 // Tactics for one move depend only on the position, not on engine depth, so
 // they're cached; badges and explanations are recomputed on every update.
@@ -208,7 +211,7 @@ export function explainMove(fen, uci, ratings, history = []) {
   if (forced && !forced.sound) {
     // Draw the tactic that doesn't work in red, matching its badge.
     for (const a of arrows) if (forced.motif.arrows.some(m => m[0] === a.from && m[1] === a.to)) a.tone = 'bad';
-    notes.push({ tone: 'bad', text: `The ${forced.label.toLowerCase()} is there, but it doesn't pay off: ${forced.reason}` });
+    notes.push({ tone: 'bad', text: `${upperFirst(forced.noun)} is available, but it doesn't pay off: ${forced.reason}` });
   }
   if (forced?.id === 'sacrifice') {
     notes.push({ tone: 'good', text: forced.motif.text });
@@ -219,7 +222,7 @@ export function explainMove(fen, uci, ratings, history = []) {
   }
   if (forced?.when === 'next') {
     const sans = sanLine(fen, forced.line);
-    notes.push({ tone: 'good', text: `Forces a ${forced.label.toLowerCase()}: after ${sans[1]}, ${sans[2]} — ${lowerFirst(forced.motif.text)}` });
+    notes.push({ tone: 'good', text: `Forces ${forced.noun}: after ${sans[1]}, ${sans[2]} — ${lowerFirst(forced.motif.text)}` });
     for (const a of forced.motif.arrows) arrows.push({ from: a[0], to: a[1], tone: 'good', dashed: true });
   }
 
@@ -271,7 +274,7 @@ export function explainMove(fen, uci, ratings, history = []) {
       .filter(m => m.tone === 'good' && !mine.has(m.id))
       .map(m => lowerFirst(m.text));
     const bestForced = forcedTactic(fen, best);
-    if (bestForced?.sound && bestForced.when === 'next' && !mine.has(bestForced.id)) reasons.unshift(`forces a ${bestForced.label.toLowerCase()}`);
+    if (bestForced?.sound && bestForced.when === 'next' && !mine.has(bestForced.id)) reasons.unshift(`forces ${bestForced.noun}`);
     const line = sanLine(fen, best.pv.slice(0, 4)).join(' ');
     comparison = {
       san: bestSan,

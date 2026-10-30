@@ -678,7 +678,7 @@ function initControls() {
     if (e.key === 'Escape') { hidePromotion(); select(null); }
   });
 
-  $('tactic-legend').innerHTML = ['fork', 'pin', 'skewer', 'discovered', 'trap', 'sacrifice']
+  $('tactic-legend').innerHTML = ['fork', 'pin', 'skewer', 'discovered', 'trap', 'remove-defender', 'overload', 'sacrifice']
     .map(id => badgeHtml(TACTIC_ICONS[id])).join(' ');
   $('legend').replaceChildren(...CLASSES.map(c => {
     const span = document.createElement('span');

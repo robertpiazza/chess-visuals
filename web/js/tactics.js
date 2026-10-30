@@ -109,6 +109,42 @@ export function enPrise(board, i) {
   return usable.some(a => VALUE[board[a].type] < VALUE[p.type]);
 }
 
+// After we capture on `sq`, the opponent's cheapest recapture might take
+// over guarding `t`. Does `t` still hang once that happens?
+function stillHangsAfterRecapture(after, sq, t, them) {
+  const recaptures = attackersOf(after, sq, them).filter(a => a !== t);
+  if (!recaptures.length) return true;
+  const cheapest = recaptures.reduce((a, b) => (VALUE[after[a].type] <= VALUE[after[b].type] ? a : b));
+  const b = after.slice();
+  b[sq] = b[cheapest];
+  b[cheapest] = null;
+  return enPrise(b, t);
+}
+
+// Enemy pieces (for `us`) that are the only guard of two or more pieces we
+// attack and that would hang without that guard. Kings aren't counted as
+// guards. Returns [{ key, defender, duties }].
+export function overloaded(board, us) {
+  const them = other(us);
+  const duties = new Map();
+  for (let t = 0; t < 64; t++) {
+    const p = board[t];
+    // Duties are real pieces, not pawns.
+    if (!p || p.color !== them || p.type === 'k' || p.type === 'p') continue;
+    if (!attackersOf(board, t, us).length) continue;
+    const guards = attackersOf(withoutPiece(board, t, us), t, them);
+    if (guards.length !== 1 || board[guards[0]].type === 'k') continue;
+    const unguarded = board.slice();
+    unguarded[guards[0]] = null;
+    if (!enPrise(unguarded, t)) continue;
+    if (!duties.has(guards[0])) duties.set(guards[0], []);
+    duties.get(guards[0]).push(t);
+  }
+  return [...duties]
+    .filter(([, list]) => list.length >= 2)
+    .map(([defender, list]) => ({ key: `${defender}:${list.join(',')}`, defender, duties: list }));
+}
+
 // Replaces the piece on `i` with an enemy dummy so own pieces "defend" it.
 function withoutPiece(board, i, color) {
   const b = board.slice();
@@ -254,6 +290,36 @@ export function motifsOfMove(board, uci) {
     if (enPrise(after, i) && !enPrise(board, i)) {
       motifs.push({ id: 'hangs', tone: 'bad', text: `Leaves the ${label(after, i)} undefended against attack`, arrows: attackersOf(after, i, them).slice(0, 1).map(a => [a, i]) });
     }
+  }
+
+  // Removing the defender: the captured piece was guarding another enemy
+  // piece that now hangs, even after the opponent recaptures.
+  if (captured && board[to]) {
+    for (let t = 0; t < 64; t++) {
+      const p = after[t];
+      if (!p || p.color !== them || p.type === 'k' || enPrise(board, t) || !enPrise(after, t)) continue;
+      const guarded = attackersOf(withoutPiece(board, t, us), t, them).includes(to);
+      if (!guarded || !stillHangsAfterRecapture(after, to, t, them)) continue;
+      motifs.push({
+        id: 'remove-defender', tone: 'good',
+        text: `Removes the defender: the ${NAME[captured.type]} on ${sqName(to)} was guarding the ${label(after, t)}, which now hangs`,
+        arrows: attackersOf(after, t, us).slice(0, 1).map(a => [a, t]),
+      });
+      break;
+    }
+  }
+
+  // Overloaded piece: one enemy piece is now the only guard of two pieces we
+  // attack, so it can't cover both. Not when the moved piece can simply be
+  // taken: then there's no lasting double duty.
+  const overloadedBefore = new Set(movedSafe ? overloaded(board, us).map(o => o.key) : []);
+  for (const o of movedSafe ? overloaded(after, us) : []) {
+    if (overloadedBefore.has(o.key)) continue;
+    motifs.push({
+      id: 'overload', tone: 'good',
+      text: `Overloads the ${label(after, o.defender)}: it alone guards the ${listText(o.duties.map(t => label(after, t)))}`,
+      arrows: o.duties.map(t => [o.defender, t]),
+    });
   }
 
   // Rescuing a piece that was under attack.

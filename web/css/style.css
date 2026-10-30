@@ -299,3 +299,5 @@ summary { cursor: pointer; font-size: 14px; color: var(--muted); }
 #tactic-legend { display: inline-flex; gap: 3px; vertical-align: middle; }
 .tactic-badge.is-unsound circle { fill: #dc2626; }
 .legend-icon.is-unsound { background: #dc2626; }
+.tactic-badge, .legend-icon { --badge-bg: #7c3aed; }
+.tactic-badge.is-unsound, .legend-icon.is-unsound { --badge-bg: #dc2626; }
