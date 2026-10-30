@@ -146,10 +146,11 @@ export class BoardView {
     this.drawArrows(state);
   }
 
-  // Small badge in a square's top-left corner marking a forced tactic: a
+  // Small badge in a square's bottom-left corner marking a forced tactic
+  // (clear of the rank numbers top-left and file letters bottom-right): a
   // pictogram (fork, pin, skewer) or a letter.
   drawIcon(parent, x, y, icon, scale = 1) {
-    const g = el('g', { class: 'tactic-badge', transform: `translate(${x + 14} ${y + 14}) scale(${scale})` }, parent);
+    const g = el('g', { class: 'tactic-badge', transform: `translate(${x + 14} ${y + 86}) scale(${scale})` }, parent);
     el('title', {}, g).textContent = `${icon.label} can be forced`;
     el('circle', { r: 11 }, g);
     if (hasGlyph(icon)) {
@@ -278,8 +279,10 @@ export class BoardView {
       if (icon) this.drawIcon(g, x, y, icon, 1.2);
       const label = formatScore(m.score);
       const w = 10 + label.length * 10;
-      el('rect', { x: cx - w / 2, y: y + 76, width: w, height: 22, rx: 11, class: 'dest-pill' }, g);
-      el('text', { x: cx, y: y + 92, 'text-anchor': 'middle', class: 'dest-label' }, g).textContent = label;
+      // Shift the score pill right if needed to clear a bottom-left badge.
+      const px = icon ? Math.max(cx - w / 2, x + 30) : cx - w / 2;
+      el('rect', { x: px, y: y + 76, width: w, height: 22, rx: 11, class: 'dest-pill' }, g);
+      el('text', { x: px + w / 2, y: y + 92, 'text-anchor': 'middle', class: 'dest-label' }, g).textContent = label;
     }
   }
 }
