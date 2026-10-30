@@ -393,7 +393,10 @@ function reasonItems(ex) {
   const items = [];
   const push = (tone, text, icon) => items.push({ tone, text, icon });
   // Notes come first: a tactic forced later in the line, or the opponent's reply.
-  for (const n of ex.notes) push(n.tone, n.text, n.tone === 'good' && ex.forced?.when === 'next' && n === ex.notes[0] ? ex.forced : null);
+  for (const n of ex.notes) {
+    const forcedNote = n.tone === 'good' && ex.forced?.sound && n === ex.notes[0] && (ex.forced.when === 'next' || ex.forced.id === 'sacrifice');
+    push(n.tone, n.text, forcedNote ? ex.forced : null);
+  }
   for (const t of ex.tactics) {
     const icon = TACTIC_ICONS[t.id] && (ex.forced?.id === t.id ? ex.forced : TACTIC_ICONS[t.id]);
     push(t.tone, t.text, icon ?? null);
@@ -673,7 +676,7 @@ function initControls() {
     if (e.key === 'Escape') { hidePromotion(); select(null); }
   });
 
-  $('tactic-legend').innerHTML = ['fork', 'pin', 'skewer', 'discovered', 'trap']
+  $('tactic-legend').innerHTML = ['fork', 'pin', 'skewer', 'discovered', 'trap', 'sacrifice']
     .map(id => badgeHtml(TACTIC_ICONS[id])).join(' ');
   $('legend').replaceChildren(...CLASSES.map(c => {
     const span = document.createElement('span');

@@ -8,6 +8,7 @@
 // 64-entry array of { type, color } or null.
 
 import { Chess } from '../vendor/chess.js';
+import { Position, moveToUci } from './engine/position.js';
 
 export const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
 export const NAME = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
@@ -169,6 +170,13 @@ export function motifsOfMove(board, uci) {
     } else {
       motifs.push({ id: 'check', tone: 'neutral', text: 'Gives check', arrows: [[to, enemyKing]] });
     }
+  } else {
+    // Mate threat: if it were our move again, could we mate at once? Only
+    // reported when the threat is new, not one we already had.
+    const mate = mateInOne(after, us);
+    if (mate && !mateInOne(board, us)) {
+      motifs.push({ id: 'mate-threat', tone: 'good', text: `Threatens mate with ${mate.san}`, arrows: [[sqIndex(mate.from), sqIndex(mate.to)]] });
+    }
   }
 
   const movedSafe = !enPrise(after, to);
@@ -180,6 +188,10 @@ export function motifsOfMove(board, uci) {
     motifs.push({ id: 'fork', tone: 'good', text: `Fork: the ${NAME[moved.type]} attacks the ${listText(names)}`, arrows: targets.map(t => [to, t]) });
   } else if (targets.length === 1 && movedSafe && after[targets[0]].type !== 'k' && enPrise(after, targets[0])) {
     motifs.push({ id: 'threat', tone: 'good', text: `Attacks the ${label(after, targets[0])}`, arrows: [[to, targets[0]]] });
+  } else if (!targets.length && movedSafe) {
+    // An undefended pawn under attack is a threat too (2.Nf3 hitting e5).
+    const pawn = attacksFrom(after, to).find(t => after[t]?.color === them && after[t].type === 'p' && enPrise(after, t));
+    if (pawn != null) motifs.push({ id: 'threat', tone: 'good', text: `Attacks the undefended pawn on ${sqName(pawn)}`, arrows: [[to, pawn]] });
   }
 
   // Pins and skewers along the moved piece's lines.
@@ -289,6 +301,28 @@ function isTrapped(board, i) {
     if (after[i] && !enPrise(after, i)) return false;
   }
   return true;
+}
+
+// A mating move for `color` if it were `color`'s turn, else null. Searched
+// with the engine's fast move generator; chess.js only names the move.
+export function mateInOne(board, color) {
+  try {
+    const fen = boardToFen(board, color);
+    const pos = new Position(fen);
+    for (const m of pos.legalMoves()) {
+      pos.makeMove(m);
+      const mate = pos.inCheck() && pos.legalMoves().length === 0;
+      pos.unmakeMove(m);
+      if (mate) {
+        const uci = moveToUci(m);
+        const san = new Chess(fen, { skipValidation: true }).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }).san;
+        return { san, from: uci.slice(0, 2), to: uci.slice(2, 4) };
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 // Legal moves for `color` on this board (castling and en passant ignored).

@@ -3,7 +3,7 @@
 // engine's preferred move has that this one lacks.
 
 import { Chess } from '../vendor/chess.js';
-import { parseFen, applyUci, motifsOfMove, sqIndex, materialBalance, enPrise, VALUE } from './tactics.js';
+import { parseFen, applyUci, motifsOfMove as rawMotifs, sqIndex, materialBalance, enPrise, VALUE, NAME } from './tactics.js';
 import { principlesOfMove } from './principles.js';
 import { formatScore } from './analysis.js';
 
@@ -16,7 +16,23 @@ export const TACTIC_ICONS = {
   'disc-check': { letter: 'D', glyph: 'discovered', label: 'Discovered check' },
   'double-check': { letter: 'D', glyph: 'discovered', label: 'Double check' },
   trap: { letter: 'T', glyph: 'trap', label: 'Trapped piece' },
+  sacrifice: { letter: '!', glyph: 'sacrifice', label: 'Sacrifice' },
 };
+
+// Threats that, combined with a developing or improving move, gain a tempo.
+const TEMPO_THREATS = {
+  check: () => 'giving check',
+  'disc-check': () => 'giving check',
+  'double-check': () => 'giving check',
+  'mate-threat': () => 'threatening mate',
+  threat: m => m.text.replace(/^Attacks/, 'attacking'),
+  fork: () => 'forking two pieces',
+  pin: () => 'pinning a piece',
+  skewer: () => 'setting up a skewer',
+  discovered: () => 'opening a discovered attack',
+};
+// In order of preference for naming what the move improves.
+const IMPROVEMENTS = ['develop', 'castle', 'active', 'open-file', 'seventh', 'center', 'king-active'];
 
 const SOUND = new Set(['best', 'good']);
 const CLASSES_LABEL = { best: 'Best', good: 'Good', inaccuracy: 'an Inaccuracy', mistake: 'a Mistake', blunder: 'a Blunder' };
@@ -36,15 +52,29 @@ export function sanLine(fen, ucis) {
 
 const lowerFirst = s => s[0].toLowerCase() + s.slice(1);
 
-// Does the engine's own line back the tactic up: a mate, or at least two
-// pawns of material won in the moves right after it. `at` is the index in the
+// Tactics for one move depend only on the position, not on engine depth, so
+// they're cached; badges and explanations are recomputed on every update.
+const motifCache = new Map();
+function motifsOfMove(board, uci) {
+  const key = board.map(p => (p ? p.color + p.type : '-')).join('') + uci;
+  let hit = motifCache.get(key);
+  if (!hit) {
+    if (motifCache.size > 5000) motifCache.clear();
+    hit = rawMotifs(board, uci);
+    motifCache.set(key, hit);
+  }
+  return hit;
+}
+
+// Material the engine's line wins for us, in pawns: Infinity for a line
+// that mates, -Infinity for one that gets mated. `at` is the index in the
 // line of the move that creates the tactic (0 for the move itself, 2 for our
 // follow-up). Material is checked after each of the opponent's next four
 // replies, so recaptures are counted, and the best of those counts. Looking
 // only at the end of a long engine line would let later, unrelated trades
 // hide a fork that clearly won something.
-export function lineWins(board, rating, at = 0) {
-  if (rating.score.mate != null) return rating.score.mate > 0;
+export function lineGain(board, rating, at = 0) {
+  if (rating.score.mate != null) return rating.score.mate > 0 ? Infinity : -Infinity;
   const us = board[sqIndex(rating.uci.slice(0, 2))].color;
   const start = materialBalance(board, us);
   const window = at + 8;
@@ -67,9 +97,40 @@ export function lineWins(board, rating, at = 0) {
       }
     });
   } catch {
-    return false;
+    return -Infinity;
   }
-  return best - start >= 2;
+  return best - start;
+}
+
+// Does the line back the tactic up: a mate, or at least two pawns won.
+export function lineWins(board, rating, at = 0) {
+  return lineGain(board, rating, at) >= 2;
+}
+
+// A sound sacrifice: the move gives up material (the moved piece can be
+// taken, or it captures something worth less), yet the engine rates it Best
+// or Good. Its line either mates, wins the material back, or the engine
+// values the pressure enough without winning it back.
+function sacrificeOf(fen, board, rating) {
+  if (!SOUND.has(rating.cls)) return null;
+  const to = sqIndex(rating.uci.slice(2, 4));
+  const given = motifsOfMove(board, rating.uci)
+    .find(m => m.id === 'loses' || (m.id === 'hangs' && m.arrows.some(a => a[1] === to)));
+  if (!given) return null;
+  const piece = NAME[board[sqIndex(rating.uci.slice(0, 2))].type];
+  const gain = lineGain(board, rating);
+  let text;
+  if (gain === Infinity) {
+    text = `Sacrifice: gives up the ${piece}, and the engine's line ends in mate`;
+  } else if (gain >= 0) {
+    text = `Sacrifice: gives up the ${piece} and wins the material back: ${sanLine(fen, rating.pv.slice(0, 6)).join(' ')}`;
+  } else {
+    text = `Sacrifice: gives up the ${piece} for lasting pressure; the engine still rates it ${CLASSES_LABEL[rating.cls]}`;
+  }
+  return {
+    ...TACTIC_ICONS.sacrifice, id: 'sacrifice', when: 'now', sound: true, given,
+    motif: { id: 'sacrifice', tone: 'good', text, arrows: [] },
+  };
 }
 
 // The forced tactic a move carries, if any: created by the move itself, or
@@ -92,6 +153,8 @@ export function forcedTactic(fen, rating) {
   if (sound) {
     const now = wins ? others[0] : pin;
     if (now) return icon(now);
+    const sac = sacrificeOf(fen, board, rating);
+    if (sac) return sac;
     const later = followUpTactic(board, rating);
     if (later) return later;
   }
@@ -128,7 +191,7 @@ export function explainMove(fen, uci, ratings, history = []) {
   const rating = ratings.get(uci);
   const [san] = sanLine(fen, [uci]);
   let tactics = motifsOfMove(board, uci);
-  const principles = principlesOfMove(board, uci, { fen, history });
+  let principles = principlesOfMove(board, uci, { fen, history });
   const notes = [];
   const arrows = tactics.flatMap(m => m.arrows.map(a => ({ from: a[0], to: a[1], tone: m.tone })));
 
@@ -137,6 +200,13 @@ export function explainMove(fen, uci, ratings, history = []) {
     // Draw the tactic that doesn't work in red, matching its badge.
     for (const a of arrows) if (forced.motif.arrows.some(m => m[0] === a.from && m[1] === a.to)) a.tone = 'bad';
     notes.push({ tone: 'bad', text: `The ${forced.label.toLowerCase()} is there, but it doesn't pay off: ${forced.reason}` });
+  }
+  if (forced?.id === 'sacrifice') {
+    notes.push({ tone: 'good', text: forced.motif.text });
+    // The material it gives up is the point, not a mistake.
+    const given = forced.given.arrows.map(a => `${a[0]}-${a[1]}`);
+    tactics = tactics.map(m => (m.id === forced.given.id && m.text === forced.given.text ? { ...m, tone: 'neutral' } : m));
+    for (const a of arrows) if (given.includes(`${a.from}-${a.to}`)) a.tone = 'neutral';
   }
   if (forced?.when === 'next') {
     const sans = sanLine(fen, forced.line);
@@ -162,6 +232,22 @@ export function explainMove(fen, uci, ratings, history = []) {
       notes.push({ tone: 'bad', text: `Expected reply: ${replySan}` });
       arrows.push({ from: sqIndex(reply.slice(0, 2)), to: sqIndex(reply.slice(2, 4)), tone: 'bad', dashed: true });
     }
+  }
+
+  // Positional drawbacks don't matter in a line that forces mate.
+  if (rating?.score.mate > 0) principles = principles.filter(p => p.tone !== 'bad');
+
+  // Gain of tempo: the move improves a piece and makes a threat the opponent
+  // has to answer, as long as it doesn't just give material away.
+  const threat = tactics.find(m => TEMPO_THREATS[m.id] && m.tone !== 'bad');
+  const improves = IMPROVEMENTS.map(id => principles.find(p => p.id === id)).find(Boolean);
+  const givesAway = tactics.some(m => (m.id === 'hangs' || m.id === 'loses') && m.tone === 'bad');
+  if (threat && improves && !givesAway && forced?.sound !== false) {
+    principles = [
+      { id: 'with-tempo', tone: 'good', text: `Gains a tempo: ${lowerFirst(improves.text)} while ${TEMPO_THREATS[threat.id](threat)}, so the opponent has to respond` },
+      // Moving a piece twice isn't a waste when it comes with a threat.
+      ...principles.filter(p => p.id !== 'tempo'),
+    ];
   }
 
   // Compare with the engine's choice.

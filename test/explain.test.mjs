@@ -116,3 +116,34 @@ test('regression: Nxc2+ fork keeps its icon even when the long engine line gives
     pv: ['b4c2', 'e2c2', 'f5c2', 'f1b5', 'd8d7', 'b5d7', 'e8d7', 'c3d5', 'g8f6', 'd5f6'] }]);
   assert.equal(forcedTactic(fen, r.get('b4c2'))?.id, 'fork');
 });
+
+test('mate threat: Qh5 threatens Qxf7#', () => {
+  const ids = motifsOfMove(parseFen('r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 2 3').board, 'd1h5');
+  assert.ok(ids.some(m => m.id === 'mate-threat' && m.text === 'Threatens mate with Qxf7#'));
+});
+
+test('sound sacrifice gets the sacrifice badge and is not called a blunder', () => {
+  // Nd6+ puts the knight where the c7 pawn takes it; Rh8+ and Rxa8 win it back with interest.
+  const fen = 'r3k3/2p5/8/1N6/8/8/8/4K2R w - - 0 1';
+  const r = rateMoves([
+    { uci: 'b5d6', score: { cp: 400 }, pv: ['b5d6', 'c7d6', 'h1h8', 'e8e7', 'h8a8'] },
+    { uci: 'h1h2', score: { cp: 100 }, pv: ['h1h2'] },
+  ]);
+  const f = forcedTactic(fen, r.get('b5d6'));
+  assert.equal(f.id, 'sacrifice');
+  assert.equal(f.sound, true);
+  const ex = explainMove(fen, 'b5d6', r);
+  assert.match(ex.notes[0].text, /^Sacrifice: gives up the knight and wins the material back/);
+  assert.ok(!ex.tactics.some(m => m.id === 'hangs' && m.tone === 'bad'));
+  // The same move rated badly is just a hanging piece, no sacrifice.
+  const bad = rateMoves([{ uci: 'b5d6', score: { cp: -300 }, pv: ['b5d6', 'c7d6'] }, { uci: 'h1h2', score: { cp: 100 } }]);
+  assert.equal(forcedTactic(fen, bad.get('b5d6')), null);
+});
+
+test('gain of tempo: 2.Nf3 develops while attacking e5', () => {
+  const fen = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2';
+  const r = rateMoves([{ uci: 'g1f3', score: { cp: 30 }, pv: ['g1f3', 'b8c6'] }]);
+  const ex = explainMove(fen, 'g1f3', r);
+  assert.equal(ex.principles[0].id, 'with-tempo');
+  assert.match(ex.principles[0].text, /develops the knight while attacking the undefended pawn on e5/);
+});

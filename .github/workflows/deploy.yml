@@ -8,6 +8,13 @@ on:
 permissions:
   contents: write
 
+# One deploy at a time, in push order. A newer push waiting in line replaces
+# an older one that hasn't started, so gh-pages always ends on the latest
+# main; a deploy already running is left to finish.
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
+
 jobs:
   test:
     runs-on: ubuntu-latest
