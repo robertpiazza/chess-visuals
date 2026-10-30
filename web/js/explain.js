@@ -9,13 +9,13 @@ import { formatScore } from './analysis.js';
 
 // Tactics that get a marker on the board when a move forces them.
 export const TACTIC_ICONS = {
-  fork: { letter: 'F', label: 'Fork' },
-  pin: { letter: 'P', label: 'Pin' },
-  skewer: { letter: 'S', label: 'Skewer' },
-  discovered: { letter: 'D', label: 'Discovered attack' },
-  'disc-check': { letter: 'D', label: 'Discovered check' },
-  'double-check': { letter: 'D', label: 'Double check' },
-  trap: { letter: 'T', label: 'Trapped piece' },
+  fork: { letter: 'F', glyph: 'fork', label: 'Fork' },
+  pin: { letter: 'P', glyph: 'pin', label: 'Pin' },
+  skewer: { letter: 'S', glyph: 'skewer', label: 'Skewer' },
+  discovered: { letter: 'D', glyph: 'discovered', label: 'Discovered attack' },
+  'disc-check': { letter: 'D', glyph: 'discovered', label: 'Discovered check' },
+  'double-check': { letter: 'D', glyph: 'discovered', label: 'Double check' },
+  trap: { letter: 'T', glyph: 'trap', label: 'Trapped piece' },
 };
 
 const SOUND = new Set(['best', 'good']);

@@ -9,6 +9,7 @@
 //                  move, and the engine score.
 
 import { formatScore } from './analysis.js';
+import { hasGlyph, glyphMarkup } from './icons.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const FILES = 'abcdefgh';
@@ -131,7 +132,7 @@ export class BoardView {
   // state: { pieces: chess.board(), orientation, lastMove, checkSq, selected,
   //          pieceRings, pieceIcons, destinations, destIcons, plainTargets,
   //          highlight, arrows }
-  // pieceIcons / destIcons: Map square → { letter, label } for forced tactics.
+  // pieceIcons / destIcons: Map square → { letter, glyph, label } for forced tactics.
   // arrows: [{ from, to, tone: 'good' | 'bad' | 'neutral' | 'book' | 'move', dashed }]
   render(state) {
     this.orientation = state.orientation;
@@ -145,12 +146,18 @@ export class BoardView {
     this.drawArrows(state);
   }
 
-  // Small lettered badge in a square's top-left corner marking a forced tactic.
+  // Small badge in a square's top-left corner marking a forced tactic: a
+  // pictogram (fork, pin, skewer) or a letter.
   drawIcon(parent, x, y, icon, scale = 1) {
     const g = el('g', { class: 'tactic-badge', transform: `translate(${x + 14} ${y + 14}) scale(${scale})` }, parent);
     el('title', {}, g).textContent = `${icon.label} can be forced`;
     el('circle', { r: 11 }, g);
-    el('text', { y: 5, 'text-anchor': 'middle' }, g).textContent = icon.letter;
+    if (hasGlyph(icon)) {
+      const glyph = el('g', { transform: 'translate(-8 -8) scale(0.667)' }, g);
+      glyph.innerHTML = glyphMarkup(icon);
+    } else {
+      el('text', { y: 5, 'text-anchor': 'middle' }, g).textContent = icon.letter;
+    }
   }
 
   drawArrows({ arrows }) {

@@ -5,6 +5,7 @@ import {
   CLASSES, rateMoves, summarizePieces, destinationsFor, formatScore, winPercent, scoreKey,
 } from './analysis.js';
 import { explainMove, forcedTactic, TACTIC_ICONS } from './explain.js';
+import { badgeHtml } from './icons.js';
 import { motifsOfMove, parseFen, sqName } from './tactics.js';
 import { OPENINGS, identifyOpening, bookContinuations } from './openings.js';
 
@@ -370,7 +371,7 @@ function renderPieceCard() {
     if (m === focus && settings.showExplain) li.classList.add('is-focus');
     const cls = CLASSES.find(c => c.id === m.cls);
     const icon = icons?.get(m.uci);
-    li.innerHTML = `<span class="dot cls-${m.cls}"></span><span><span class="san">${sans.get(m.uci) ?? m.uci}</span>${m.cls === 'best' ? ' <span class="star">★</span>' : ''}${icon ? ` <span class="legend-icon" title="${icon.label} can be forced">${icon.letter}</span>` : ''} <span class="muted">${cls.label}</span></span><span class="score">${formatScore(m.score)}</span><span class="win">${Math.round(m.win)}%</span>`;
+    li.innerHTML = `<span class="dot cls-${m.cls}"></span><span><span class="san">${sans.get(m.uci) ?? m.uci}</span>${m.cls === 'best' ? ' <span class="star">★</span>' : ''}${icon ? ` ${badgeHtml(icon)}` : ''} <span class="muted">${cls.label}</span></span><span class="score">${formatScore(m.score)}</span><span class="win">${Math.round(m.win)}%</span>`;
     li.title = `${cls.label}: winning chance ${Math.round(m.win)}% (${m.loss.toFixed(1)} points below the best move). Click to explain, double-click to play.`;
     li.addEventListener('mouseenter', () => { hoverSq = m.to; render(); renderExplain(); });
     li.addEventListener('mouseleave', () => { hoverSq = null; render(); renderExplain(); });
@@ -383,10 +384,10 @@ function renderPieceCard() {
 // ── Explanations ────────────────────────────────────────────────────────────
 function reasonItems(ex) {
   const items = [];
-  const push = (tone, text, letter) => items.push({ tone, text, letter });
+  const push = (tone, text, icon) => items.push({ tone, text, icon });
   // Notes come first: a tactic forced later in the line, or the opponent's reply.
-  for (const n of ex.notes) push(n.tone, n.text, n.tone === 'good' && ex.forced?.when === 'next' && n === ex.notes[0] ? ex.forced.letter : null);
-  for (const t of ex.tactics) push(t.tone, t.text, TACTIC_ICONS[t.id]?.letter ?? null);
+  for (const n of ex.notes) push(n.tone, n.text, n.tone === 'good' && ex.forced?.when === 'next' && n === ex.notes[0] ? ex.forced : null);
+  for (const t of ex.tactics) push(t.tone, t.text, TACTIC_ICONS[t.id] ?? null);
   for (const p of ex.principles) push(p.tone, p.text, null);
   return items;
 }
@@ -396,7 +397,7 @@ function reasonsHtml(ex) {
   if (!items.length) return '<ul class="reasons"><li class="empty-row"><span class="empty">No tactics or principle changes stand out; the rating comes from the engine\'s deeper calculation.</span></li></ul>';
   const mark = { good: '+', bad: '−', neutral: '·' };
   return '<ul class="reasons">' + items.map(i =>
-    `<li class="tone-${i.tone}${i.letter ? ' tactic' : ''}"><span class="mark">${i.letter ? `<span class="legend-icon">${i.letter}</span>` : mark[i.tone]}</span><span>${i.text}</span></li>`,
+    `<li class="tone-${i.tone}${i.icon ? ' tactic' : ''}"><span class="mark">${i.icon ? badgeHtml(i.icon) : mark[i.tone]}</span><span>${i.text}</span></li>`,
   ).join('') + '</ul>';
 }
 
@@ -662,6 +663,8 @@ function initControls() {
     if (e.key === 'Escape') { hidePromotion(); select(null); }
   });
 
+  $('tactic-legend').innerHTML = ['fork', 'pin', 'skewer', 'discovered', 'trap']
+    .map(id => badgeHtml(TACTIC_ICONS[id])).join(' ');
   $('legend').replaceChildren(...CLASSES.map(c => {
     const span = document.createElement('span');
     span.innerHTML = `<i class="swatch cls-${c.id}"></i>${c.label}`;
