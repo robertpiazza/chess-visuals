@@ -7,7 +7,7 @@ A browser chess trainer for standard chess. On your turn, every one of your piec
 **Rings on your pieces (nothing selected)**
 - Each piece gets a pie ring with one slice per legal move, sorted best to worst clockwise from 12 o'clock.
 - Slice colour is the move's quality: green Best, lime Good, yellow Inaccuracy, orange Mistake, red Blunder.
-- A ★ marks every piece that has at least one move rated Best (the top move, plus any within 2 win% points of it).
+- A ★ marks every piece that has at least one move rated Best (the engine's top move, or a move tied with it on score).
 - A faint grey ring means the piece has no legal moves.
 
 **Selected piece**
@@ -47,8 +47,8 @@ The engine scores every legal move (Stockfish MultiPV set to the number of legal
 
 | Class | Drop vs. best move |
 |---|---|
-| Best | ≤ 2 (the top move is always Best) |
-| Good | ≤ 6 |
+| Best | the engine's top score, or tied with it |
+| Good | ≤ 6 (but not tied with the top) |
 | Inaccuracy | ≤ 12 |
 | Mistake | ≤ 22 |
 | Blunder | > 22 |

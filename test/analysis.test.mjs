@@ -20,7 +20,7 @@ test('moves are ranked and classed by drop in win%', () => {
   ]);
   assert.equal(r.get('e2e4').rank, 0);
   assert.equal(r.get('e2e4').cls, 'best');
-  assert.equal(r.get('g1f3').cls, 'best');
+  assert.equal(r.get('g1f3').cls, 'good'); // 0.05 pawns worse: close, but not Best
   assert.equal(r.get('f2f3').cls, 'inaccuracy');
   assert.equal(r.get('g2g4').cls, 'blunder');
   assert.equal(r.get('e1e2').rank, 4);
@@ -59,4 +59,18 @@ test('built-in search finds a mate in one and a free queen', () => {
   assert.deepEqual(rateMoves(mate).get('h5f7').score, { mate: 1 });
   const queen = new Searcher('rnb1kbnr/pppp1ppp/8/4p3/4P2q/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3').run({ maxDepth: 3 });
   assert.equal(rateMoves(queen).get('f3h4').rank, 0);
+});
+
+test('Best is only the top score or a tie with it', () => {
+  const r = rateMoves([
+    { uci: 'e2e4', score: { cp: 35 } },
+    { uci: 'd2d4', score: { cp: 35 } },
+    { uci: 'g1f3', score: { cp: 34 } },
+  ]);
+  assert.equal(r.get('e2e4').cls, 'best');
+  assert.equal(r.get('d2d4').cls, 'best');
+  assert.equal(r.get('g1f3').cls, 'good');
+  const mates = rateMoves([{ uci: 'a1a8', score: { mate: 1 } }, { uci: 'h1h8', score: { mate: 3 } }]);
+  assert.equal(mates.get('a1a8').cls, 'best');
+  assert.equal(mates.get('h1h8').cls, 'good');
 });

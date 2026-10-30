@@ -10,9 +10,10 @@ export function winPercent(score) {
 }
 
 // Classes ordered best → worst. `maxLoss` is the largest drop in win% (versus
-// the best move) a move can have and still fall in the class.
+// the best move) a move can have and still fall in the class. Best is only
+// for moves with exactly the engine's top score (see rateMoves).
 export const CLASSES = [
-  { id: 'best',       label: 'Best',       symbol: '',   maxLoss: 2 },
+  { id: 'best',       label: 'Best',       symbol: '',   maxLoss: 0 },
   { id: 'good',       label: 'Good',       symbol: '',   maxLoss: 6 },
   { id: 'inaccuracy', label: 'Inaccuracy', symbol: '?!', maxLoss: 12 },
   { id: 'mistake',    label: 'Mistake',    symbol: '?',  maxLoss: 22 },
@@ -21,8 +22,9 @@ export const CLASSES = [
 
 export const CLASS_INDEX = Object.fromEntries(CLASSES.map((c, i) => [c.id, i]));
 
+// Class for a move that isn't tied with the top move.
 export function classify(loss) {
-  return CLASSES.find(c => loss <= c.maxLoss).id;
+  return CLASSES.slice(1).find(c => loss <= c.maxLoss).id;
 }
 
 // Comparable number for sorting scores, higher = better for the mover.
@@ -61,7 +63,8 @@ export function rateMoves(lines) {
       win,
       loss,
       rank,
-      cls: rank === 0 ? 'best' : classify(loss),
+      // Best means the engine's top score or tied with it, nothing broader.
+      cls: scoreKey(line.score) === scoreKey(sorted[0].score) ? 'best' : classify(loss),
     });
   });
   return map;
