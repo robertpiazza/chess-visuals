@@ -1,8 +1,10 @@
 // Positional commentary on a move, based on common chess principles:
 // center control, development, king safety, trades relative to the material
-// balance, piece activity, open files and pawn structure.
+// balance, piece activity, open files, batteries, pawn breaks and pawn
+// structure.
 //
-// Returns [{ id, tone: 'good' | 'bad' | 'neutral', text }].
+// Returns [{ id, tone: 'good' | 'bad' | 'neutral', text, arrows? }], where
+// arrows are [from, to] square-index pairs to draw on the board.
 
 import {
   VALUE, NAME, sqIndex, sqName, applyUci, attacksFrom, enPrise, materialBalance,
@@ -11,6 +13,92 @@ import {
 const CENTER = ['d4', 'e4', 'd5', 'e5'].map(sqIndex);
 
 const other = c => (c === 'w' ? 'b' : 'w');
+const onBoard = (f, r) => f >= 0 && f < 8 && r >= 0 && r < 8;
+const DIAG = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+const ORTHO = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+// Can this piece slide along (df, dr)?
+function slidesAlong(type, df, dr) {
+  const diagonal = df !== 0 && dr !== 0;
+  return type === 'q' || (diagonal ? type === 'b' : type === 'r');
+}
+
+// "the e-file", "the 7th rank" (from `color`'s side), or "the b1–h7 diagonal".
+function lineName(sq, df, dr, color) {
+  if (df === 0) return `the ${'abcdefgh'[sq & 7]}-file`;
+  if (dr === 0) {
+    const rank = color === 'w' ? (sq >> 3) + 1 : 8 - (sq >> 3);
+    return `the ${rank}${['st', 'nd', 'rd'][rank - 1] ?? 'th'} rank`;
+  }
+  const ends = [-1, 1].map(k => {
+    let f = sq & 7, r = sq >> 3;
+    while (onBoard(f + k * df, r + k * dr)) { f += k * df; r += k * dr; }
+    return r * 8 + f;
+  }).sort((a, b) => a - b);
+  return `the ${sqName(ends[0])}–${sqName(ends[1])} diagonal`;
+}
+
+function firstPiece(board, sq, df, dr) {
+  for (let f = (sq & 7) + df, r = (sq >> 3) + dr; onBoard(f, r); f += df, r += dr) {
+    if (board[r * 8 + f]) return r * 8 + f;
+  }
+  return null;
+}
+
+// Batteries the piece on `sq` is part of: a friendly slider directly in
+// front of or behind it on a line both can use, aimed at something worth
+// aiming at (the enemy king's area, an enemy piece, or an open or half-open
+// file).
+// Returns [{ key, back, front, dir, aim }].
+function batteriesAt(board, sq) {
+  const p = board[sq];
+  if (!p || !['q', 'r', 'b'].includes(p.type)) return [];
+  const king = board.findIndex(x => x?.type === 'k' && x.color !== p.color);
+  const kingZone = new Set();
+  for (let df = -1; df <= 1; df++) for (let dr = -1; dr <= 1; dr++) {
+    if (king >= 0 && onBoard((king & 7) + df, (king >> 3) + dr)) kingZone.add(king + dr * 8 + df);
+  }
+  const out = [];
+  for (const [df, dr] of [...DIAG, ...ORTHO]) {
+    if (!slidesAlong(p.type, df, dr)) continue;
+    const partner = s => s != null && board[s].color === p.color && slidesAlong(board[s].type, df, dr);
+    const ahead = firstPiece(board, sq, df, dr);
+    const behind = firstPiece(board, sq, -df, -dr);
+    for (const [back, front] of [[sq, ahead], [behind, sq]]) {
+      if (!partner(back === sq ? front : back)) continue;
+      const aim = batteryAim(board, front, df, dr, p.color, kingZone);
+      // Same partner on the same line = same battery, wherever the moved
+      // piece sits on it.
+      const partnerSq = back === sq ? front : back;
+      const axis = df * dr > 0 || (dr === 0 && df !== 0) ? `${Math.abs(df)},${Math.abs(dr)}` : `${-Math.abs(df)},${Math.abs(dr)}`;
+      if (aim) out.push({ key: `${partnerSq}:${axis}`, back, front, dir: [df, dr], aim });
+    }
+  }
+  return out;
+}
+
+// Where a battery whose front piece is on `front` points along (df, dr).
+function batteryAim(board, front, df, dr, color, kingZone) {
+  {
+    let aim = null;
+    const path = [];
+    for (let f = (front & 7) + df, r = (front >> 3) + dr; onBoard(f, r); f += df, r += dr) {
+      const t = r * 8 + f;
+      path.push(t);
+      if (kingZone.has(t)) { aim = { kind: 'king', sq: t }; break; }
+      if (board[t]) {
+        // Pawns away from the king aren't worth a battery.
+        if (board[t].color !== color && board[t].type !== 'p') aim = { kind: 'piece', sq: t };
+        break;
+      }
+    }
+    if (!aim && df === 0 && path.length && !path.some(t => board[t]?.color === color)) {
+      const theirPawn = path.some(t => board[t]?.type === 'p');
+      aim = { kind: theirPawn ? 'half-open' : 'open', sq: path.at(-1) };
+    }
+    return aim;
+  }
+}
 
 function centerControl(board, color) {
   let n = 0;
@@ -102,7 +190,10 @@ export function principlesOfMove(board, uci, ctx) {
   if (piece.type === 'n' && ((to & 7) === 0 || (to & 7) === 7) && !board[to]) {
     add('rim', 'bad', 'A knight on the rim controls fewer squares');
   }
-  if (opening && piece.type === 'q' && fullmove <= 8) {
+  // Early queen: leaving the back two ranks in the first moves, where it
+  // can be chased. Qc2 or Qe2 stays home and doesn't count.
+  const queenOut = us === 'w' ? (to >> 3) >= 2 : (to >> 3) <= 5;
+  if (opening && piece.type === 'q' && fullmove <= 6 && queenOut) {
     const undeveloped = ['b', 'n'].reduce((s, t) => s + board.filter((p, i) => p?.color === us && p.type === t && (i >> 3) === homeRank).length, 0);
     if (undeveloped >= 2) add('early-queen', 'bad', 'Brings the queen out early; it can be chased while you lose time');
   }
@@ -165,6 +256,41 @@ export function principlesOfMove(board, uci, ctx) {
   if (piece.type === 'k' && endgame) {
     const dist = i => Math.max(Math.abs((i & 7) - 3.5), Math.abs((i >> 3) - 3.5));
     if (dist(to) < dist(from)) add('king-active', 'good', 'Centralizes the king: in the endgame it is a fighting piece');
+  }
+
+  // Batteries: a new line-up of the moved piece with another slider.
+  if (['q', 'r', 'b'].includes(piece.type)) {
+    const before = new Set(batteriesAt(board, from).map(b => b.key));
+    for (const bat of batteriesAt(after, to)) {
+      if (before.has(bat.key)) continue;
+      // Bigger piece named first: "queen and bishop".
+      const names = [after[bat.back], after[bat.front]].map(x => x.type).sort((x, y) => VALUE[y] - VALUE[x]).map(t => NAME[t]);
+      const rooks = names[0] === 'rook' && names[1] === 'rook';
+      const line = lineName(to, bat.dir[0], bat.dir[1], us);
+      const where = bat.aim.kind === 'open' || bat.aim.kind === 'half-open' ? `the ${bat.aim.kind} ${line.replace('the ', '')}` : line;
+      const lead = rooks ? `Doubles rooks on ${where}` : `Forms a battery: ${names[0]} and ${names[1]} lined up on ${where}`;
+      let text = lead;
+      if (bat.aim.kind === 'king') text += rooks ? ', aimed at the king' : ' toward the king';
+      else if (bat.aim.kind === 'piece') text += `${rooks ? ',' : ''} aimed at the ${NAME[after[bat.aim.sq].type]} on ${sqName(bat.aim.sq)}`;
+      add('battery', 'good', text);
+      out.at(-1).arrows = [[bat.back, bat.aim.sq]];
+    }
+  }
+
+  // Pawn break: the pawn now attacks an enemy pawn, offering a trade that
+  // opens lines. A capture is the break being carried out, not offered.
+  if (piece.type === 'p' && !board[to] && (from & 7) === (to & 7)) {
+    const dr = us === 'w' ? 1 : -1;
+    const levers = [-1, 1]
+      .filter(df => onBoard((to & 7) + df, (to >> 3) + dr))
+      .map(df => to + dr * 8 + df)
+      .filter(t => after[t]?.type === 'p' && after[t].color === them);
+    if (levers.length) {
+      const t = levers[0];
+      const central = 'de'.includes('abcdefgh'[t & 7]);
+      add('pawn-break', 'good', `Pawn break: challenges the pawn on ${sqName(t)}${central ? ' and strikes at the center' : ' to open lines'}`);
+      out.at(-1).arrows = [[to, t]];
+    }
   }
 
   // Defending a piece that was hanging.

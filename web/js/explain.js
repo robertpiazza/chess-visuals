@@ -120,7 +120,12 @@ function sacrificeOf(fen, board, rating) {
   const piece = NAME[board[sqIndex(rating.uci.slice(0, 2))].type];
   const gain = lineGain(board, rating);
   let text;
-  if (gain === Infinity) {
+  if (piece === 'pawn' && gain !== Infinity) {
+    // A pawn given up for play is a gambit.
+    text = gain >= 0
+      ? `Gambit: offers the pawn and wins the material back: ${sanLine(fen, rating.pv.slice(0, 6)).join(' ')}`
+      : `Gambit: offers the pawn for quicker development and open lines; the engine still rates it ${CLASSES_LABEL[rating.cls]}`;
+  } else if (gain === Infinity) {
     text = `Sacrifice: gives up the ${piece}, and the engine's line ends in mate`;
   } else if (gain >= 0) {
     text = `Sacrifice: gives up the ${piece} and wins the material back: ${sanLine(fen, rating.pv.slice(0, 6)).join(' ')}`;
@@ -193,7 +198,11 @@ export function explainMove(fen, uci, ratings, history = []) {
   let tactics = motifsOfMove(board, uci);
   let principles = principlesOfMove(board, uci, { fen, history });
   const notes = [];
-  const arrows = tactics.flatMap(m => m.arrows.map(a => ({ from: a[0], to: a[1], tone: m.tone })));
+  const arrows = [
+    ...tactics.flatMap(m => m.arrows.map(a => ({ from: a[0], to: a[1], tone: m.tone }))),
+    // Positional ideas (batteries, pawn breaks) in a quieter colour.
+    ...principles.flatMap(p => (p.arrows ?? []).map(a => ({ from: a[0], to: a[1], tone: 'neutral' }))),
+  ];
 
   const forced = rating ? forcedTactic(fen, rating) : null;
   if (forced && !forced.sound) {

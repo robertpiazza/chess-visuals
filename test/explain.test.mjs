@@ -147,3 +147,28 @@ test('gain of tempo: 2.Nf3 develops while attacking e5', () => {
   assert.equal(ex.principles[0].id, 'with-tempo');
   assert.match(ex.principles[0].text, /develops the knight while attacking the undefended pawn on e5/);
 });
+
+test('battery: Qc2 behind Bd3 aims at h7', () => {
+  const fen = 'r1bq1rk1/ppp2ppp/2n2n2/3p4/3P4/2PB1N2/PP3PPP/RNBQ1RK1 w - - 0 8';
+  const ps = principlesOfMove(parseFen(fen).board, 'd1c2', { fen, history: [] });
+  assert.ok(ps.some(p => p.id === 'battery' && /queen and bishop lined up on the b1–h7 diagonal toward the king/.test(p.text)));
+});
+
+test('battery: doubling rooks on an open file, not when already doubled', () => {
+  const fen = '6k1/ppp2ppp/8/8/8/8/R4PPP/4R1K1 w - - 0 1';
+  const ps = principlesOfMove(parseFen(fen).board, 'a2e2', { fen, history: [] });
+  assert.ok(ps.some(p => p.id === 'battery' && p.text === 'Doubles rooks on the open e-file'));
+  // Sliding the front rook up the same file keeps the same battery: not new.
+  const doubled = '6k1/ppp2ppp/8/8/8/8/4RPPP/4R1K1 w - - 0 1';
+  assert.ok(!principlesOfMove(parseFen(doubled).board, 'e2e4', { fen: doubled, history: [] }).some(p => p.id === 'battery'));
+});
+
+test('pawn breaks: Queen\'s Gambit c4 and King\'s Gambit f4, not 1.e4', () => {
+  const qg = 'rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 0 2';
+  assert.ok(principlesOfMove(parseFen(qg).board, 'c2c4', { fen: qg, history: [] })
+    .some(p => p.id === 'pawn-break' && p.text === 'Pawn break: challenges the pawn on d5 and strikes at the center'));
+  const kg = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2';
+  assert.ok(principlesOfMove(parseFen(kg).board, 'f2f4', { fen: kg, history: [] }).some(p => p.id === 'pawn-break'));
+  const start = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  assert.ok(!principlesOfMove(parseFen(start).board, 'e2e4', { fen: start, history: [] }).some(p => p.id === 'pawn-break'));
+});
