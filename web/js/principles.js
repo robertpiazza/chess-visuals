@@ -302,6 +302,47 @@ export function principlesOfMove(board, uci, ctx) {
     }
   }
 
+  // Rook and passed pawns (Tarrasch's rule): rooks belong behind passed
+  // pawns, ours to push them and the opponent's to chase them. In front of
+  // our own passer the rook just blocks it.
+  if (piece.type === 'r' && (from & 7) !== (to & 7)) {
+    const f = to & 7;
+    for (let r = 0; r < 8; r++) {
+      const sq = r * 8 + f;
+      const p = after[sq];
+      if (p?.type !== 'p' || !isPassed(after, sq)) continue;
+      // Nothing between the rook and the pawn.
+      const lo = Math.min(sq, to), hi = Math.max(sq, to);
+      let clear = true;
+      for (let x = lo + 8; x < hi; x += 8) if (after[x]) clear = false;
+      if (!clear) continue;
+      // "Behind" is toward the pawn owner's own back rank.
+      const behind = p.color === 'w' ? to < sq : to > sq;
+      if (p.color === us && behind) {
+        add('rook-passer', 'good', `Puts the rook behind your passed pawn on ${sqName(sq)}, where it supports the pawn all the way up the board`);
+      } else if (p.color === us) {
+        add('rook-passer', 'bad', `Puts the rook in front of your passed pawn on ${sqName(sq)}, where it blocks it; rooks belong behind passed pawns`);
+      } else if (behind) {
+        add('rook-passer', 'good', `Puts the rook behind the enemy passed pawn on ${sqName(sq)}, attacking it and following it as it advances`);
+      }
+      if (out.at(-1)?.id === 'rook-passer') out.at(-1).arrows = [[to, sq]];
+    }
+  }
+
+  // Opposition: in a king and pawn ending, kings facing each other on a file
+  // or rank with an odd number of squares between them. After our move it's
+  // the opponent's turn, so their king has to give way.
+  if (piece.type === 'k' && nonPawnMaterial(after) === 0) {
+    const theirKing = after.findIndex(p => p?.type === 'k' && p.color === them);
+    const df = Math.abs((theirKing & 7) - (to & 7)), dr = Math.abs((theirKing >> 3) - (to >> 3));
+    const gap = df === 0 ? dr : dr === 0 ? df : 0;
+    if (gap === 2) {
+      add('opposition', 'good', 'Takes the opposition: the kings face each other with one square between, and the opponent\'s king has to give way');
+    } else if (gap === 4 || gap === 6) {
+      add('opposition', 'good', `Takes the distant opposition: the kings face each other with ${gap - 1} squares between, so you can keep the opposition as they approach`);
+    }
+  }
+
   // Outpost: a knight in the opponent's half on a square our pawn guards
   // and no enemy pawn can ever attack (none left on the neighbouring files
   // ahead of it).

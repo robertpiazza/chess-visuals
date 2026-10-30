@@ -204,3 +204,19 @@ test('bad bishop: e5 in the French locks d4/e5 on the c1 bishop\'s colour; exd5 
   const start = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
   assert.ok(!principlesOfMove(parseFen(start).board, 'e2e4', { fen: start, history: [] }).some(p => p.id === 'bad-bishop'));
 });
+
+test('rook and passed pawn: behind your own or the enemy\'s passer is good, in front of your own is bad', () => {
+  const ids = (fen, uci) => principlesOfMove(parseFen(fen).board, uci, { fen, history: [] }).filter(p => p.id === 'rook-passer');
+  assert.equal(ids('6k1/5ppp/8/3P4/8/8/5PPP/R5K1 w - - 0 1', 'a1d1')[0].tone, 'good');
+  assert.equal(ids('6k1/R4ppp/8/3P4/8/8/5PPP/6K1 w - - 0 1', 'a7d7')[0].tone, 'bad');
+  assert.match(ids('6k1/5ppp/R7/8/3p4/8/5PPP/6K1 w - - 0 1', 'a6d6')[0].text, /behind the enemy passed pawn on d4/);
+  assert.equal(ids('6k1/2p2ppp/8/3P4/8/8/5PPP/R5K1 w - - 0 1', 'a1d1').length, 0); // c7 pawn: d5 isn't passed
+});
+
+test('opposition: direct and distant in a pawn ending only', () => {
+  const opp = (fen, uci) => principlesOfMove(parseFen(fen).board, uci, { fen, history: [] }).find(p => p.id === 'opposition');
+  assert.match(opp('8/8/4k3/8/8/4K3/4P3/8 w - - 0 1', 'e3e4').text, /^Takes the opposition/);
+  assert.match(opp('8/8/4k3/8/8/P7/3K4/8 w - - 0 1', 'd2e2').text, /^Takes the distant opposition/);
+  assert.equal(opp('8/8/4k3/8/8/4K3/4P3/8 w - - 0 1', 'e3d4'), undefined);
+  assert.equal(opp('8/8/4k3/8/8/4K3/4P3/R7 w - - 0 1', 'e3e4'), undefined); // a rook on the board: not a pawn ending
+});
