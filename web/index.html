@@ -37,11 +37,37 @@
             <option value="both">Both sides (analysis)</option>
           </select>
         </div>
+        <div class="row">
+          <label for="practice">Practice an opening</label>
+          <select id="practice">
+            <option value="">Free play</option>
+          </select>
+        </div>
         <div class="buttons">
           <button id="new-game" class="primary">New game</button>
           <button id="undo">Undo</button>
           <button id="flip">Flip</button>
         </div>
+      </div>
+
+      <div class="card" id="explain-card" hidden>
+        <h2 id="explain-title">Why this move</h2>
+        <div id="explain-body"></div>
+      </div>
+
+      <div class="card" id="piece-card" hidden>
+        <h2 id="piece-title">Moves</h2>
+        <ol class="move-ratings" id="piece-moves"></ol>
+      </div>
+
+      <div class="card" id="opening-card">
+        <h2>Opening</h2>
+        <div id="opening-body"></div>
+      </div>
+
+      <div class="card">
+        <h2>Moves played</h2>
+        <ol class="history" id="history"></ol>
       </div>
 
       <div class="card">
@@ -55,22 +81,15 @@
         </div>
         <label class="check"><input type="checkbox" id="show-rings"> Rings on my pieces</label>
         <label class="check"><input type="checkbox" id="show-dests"> Ratings on moves of the selected piece</label>
+        <label class="check"><input type="checkbox" id="show-explain"> Tactic icons, arrows and explanations</label>
+        <label class="check"><input type="checkbox" id="show-book"> Book moves as arrows</label>
         <div class="engine-name" id="engine-name"></div>
       </div>
 
       <div class="card legend">
         <div class="legend-items" id="legend"></div>
         <p class="hint">Ring around a piece: one slice per legal move, best to worst going clockwise from the top. ★ marks every piece that has a Best-rated move, and every Best-rated target of the selected piece. On a selected piece's targets, the arc fills to your winning chance after that move; the number is the engine score from your side.</p>
-      </div>
-
-      <div class="card" id="piece-card" hidden>
-        <h2 id="piece-title">Moves</h2>
-        <ol class="move-ratings" id="piece-moves"></ol>
-      </div>
-
-      <div class="card">
-        <h2>Moves played</h2>
-        <ol class="history" id="history"></ol>
+        <p class="hint"><span class="legend-icon">F</span> <span class="legend-icon">P</span> <span class="legend-icon">S</span> <span class="legend-icon">D</span> <span class="legend-icon">T</span> mark a fork, pin, skewer, discovered attack or trapped piece the move forces, either right away or after the opponent's best reply in the engine's line. Only moves rated Best or Good get one. Purple arrows show your tactic, red arrows what the opponent gets, blue arrows book moves.</p>
       </div>
 
       <details class="card">

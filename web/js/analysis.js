@@ -40,7 +40,8 @@ export function formatScore(score) {
   return (pawns > 0 ? '+' : '') + pawns.toFixed(1);
 }
 
-// lines: [{ uci, score: { cp } | { mate } }] from the side to move's view.
+// lines: [{ uci, score: { cp } | { mate }, pv? }] from the side to move's view.
+// pv, when present, is the expected line starting with this move.
 // Returns Map uci → rating.
 export function rateMoves(lines) {
   if (!lines.length) return new Map();
@@ -56,6 +57,7 @@ export function rateMoves(lines) {
       to: line.uci.slice(2, 4),
       promotion: line.uci[4] || null,
       score: line.score,
+      pv: line.pv ?? [line.uci],
       win,
       loss,
       rank,

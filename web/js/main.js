@@ -1,14 +1,17 @@
-import { Chess } from '../vendor/chess.js';
+import { Chess, DEFAULT_POSITION as DEFAULT_FEN } from '../vendor/chess.js';
 import { BoardView } from './board.js';
 import { createEngine } from './engine/engine.js';
 import {
   CLASSES, rateMoves, summarizePieces, destinationsFor, formatScore, winPercent, scoreKey,
 } from './analysis.js';
+import { explainMove, forcedTactic, TACTIC_ICONS } from './explain.js';
+import { motifsOfMove, parseFen, sqName } from './tactics.js';
+import { OPENINGS, identifyOpening, bookContinuations } from './openings.js';
 
 const $ = id => document.getElementById(id);
 
 // ── Settings (remembered per browser) ───────────────────────────────────────
-const DEFAULTS = { mode: 'w', strength: 8, depth: 12, showRings: true, showDests: true };
+const DEFAULTS = { mode: 'w', strength: 8, depth: 12, showRings: true, showDests: true, showExplain: true, showBook: true };
 const settings = { ...DEFAULTS, ...loadSettings() };
 
 function loadSettings() {
@@ -32,6 +35,11 @@ let engine = null;
 let analysis = null;               // { fen, ratings, summary, depth, done }
 const cache = new Map();           // fen → analysis
 let searchToken = 0;
+let focusUci = null;               // move picked in the selected piece's list
+let practice = null;               // opening being practiced, or null
+let customStart = false;           // game began from a loaded FEN (no book)
+const iconCache = new WeakMap();   // analysis → Map uci → forced-tactic icon
+const explainCache = new Map();    // fen|uci|depth → explanation
 
 const board = new BoardView($('board-wrap'), {
   onSquareDown, onSquareUp,
@@ -72,6 +80,7 @@ function onSquareUp(sq, { click }) {
 
 function select(sq) {
   selected = sq;
+  focusUci = null;
   render();
   renderPieceCard();
 }
@@ -99,6 +108,7 @@ function onPositionChanged() {
   render();
   renderHistory();
   renderPieceCard();
+  renderOpening();
   $('fen').value = game.fen();
   if (game.isGameOver()) {
     analysis = null;
@@ -154,7 +164,7 @@ function afterAnalysis(token, human) {
     render();
     renderPieceCard();
   } else {
-    const uci = chooseComputerMove();
+    const uci = chooseBookMove() ?? chooseComputerMove();
     setTimeout(() => {
       if (token === searchToken && !humanToMove()) playMove(uci);
     }, 350);
@@ -164,6 +174,28 @@ function afterAnalysis(token, human) {
 // The computer analyses less deeply when set weaker.
 function opponentDepth() {
   return Math.max(4, Math.min(settings.depth, 6 + Math.round(settings.strength / 2)));
+}
+
+// While in the opening library, the computer plays a book move: the practice
+// line's move if one is set, otherwise a random book continuation that the
+// engine doesn't consider a mistake.
+function chooseBookMove() {
+  if (customStart) return null;
+  const history = game.history();
+  const legal = game.moves({ verbose: true });
+  const lan = san => legal.find(m => m.san === san)?.lan;
+  if (practice && followsPractice() && history.length < practice.sans.length) {
+    return lan(practice.sans[history.length]) ?? null;
+  }
+  const ok = bookContinuations(history)
+    .map(c => lan(c.san))
+    .filter(u => u && !['mistake', 'blunder'].includes(analysis?.ratings.get(u)?.cls));
+  return ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
+}
+
+function followsPractice() {
+  const h = game.history();
+  return !!practice && h.every((san, i) => i >= practice.sans.length || practice.sans[i] === san);
 }
 
 // Picks a move from the rated list. At full strength always the best; lower
@@ -202,21 +234,99 @@ function checkSquare() {
   return null;
 }
 
+function analysisReady() {
+  return !!analysis && analysis.fen === game.fen() && analysis.ratings.size > 0;
+}
+
+// Forced-tactic icon for each sound move in the current analysis.
+function tacticIcons() {
+  if (!analysisReady() || !settings.showExplain) return null;
+  let icons = iconCache.get(analysis);
+  if (!icons) {
+    icons = new Map();
+    for (const r of analysis.ratings.values()) {
+      const f = forcedTactic(analysis.fen, r);
+      if (f) icons.set(r.uci, f);
+    }
+    iconCache.set(analysis, icons);
+  }
+  return icons;
+}
+
+function explain(fen, uci, history) {
+  const a = cache.get(fen);
+  const key = `${fen}|${uci}|${a?.depth ?? 0}`;
+  if (!explainCache.has(key)) explainCache.set(key, explainMove(fen, uci, a?.ratings ?? new Map(), history));
+  return explainCache.get(key);
+}
+
+// The move the explanation card and arrows describe while a piece is
+// selected: the hovered target, else the row picked in the list, else the
+// piece's best move.
+function focusRating() {
+  if (!selected || !analysisReady()) return null;
+  const summary = analysis.summary.get(selected);
+  if (!summary) return null;
+  const hovered = summary.moves.find(m => m.to === hoverSq);
+  return hovered ?? summary.moves.find(m => m.uci === focusUci) ?? summary.best;
+}
+
+const named = arrows => arrows.map(a => ({ ...a, from: sqName(a.from), to: sqName(a.to) }));
+
+function bookArrows() {
+  if (customStart || !settings.showBook) return [];
+  const legal = game.moves({ verbose: true });
+  const history = game.history();
+  let sans = bookContinuations(history).map(c => c.san);
+  if (practice && followsPractice() && history.length < practice.sans.length) sans = [practice.sans[history.length]];
+  return sans.slice(0, 5).map(san => legal.find(m => m.san === san)).filter(Boolean)
+    .map(m => ({ from: m.from, to: m.to, tone: 'book' }));
+}
+
 function render() {
   const human = humanToMove();
-  const ready = analysis && analysis.fen === game.fen() && analysis.ratings.size > 0;
-  let pieceRings = null, destinations = null, plainTargets = null;
+  const ready = analysisReady();
+  const icons = human ? tacticIcons() : null;
+  let pieceRings = null, pieceIcons = null, destinations = null, destIcons = null, plainTargets = null;
+  let arrows = [];
 
   if (human && ready && settings.showRings) {
     pieceRings = new Map();
     for (const row of game.board()) for (const p of row) {
       if (p && p.color === game.turn()) pieceRings.set(p.square, analysis.summary.get(p.square) ?? null);
     }
+    if (icons) {
+      pieceIcons = new Map();
+      for (const [uci, icon] of icons) if (!pieceIcons.has(uci.slice(0, 2))) pieceIcons.set(uci.slice(0, 2), icon);
+    }
   }
   if (selected) {
     const summary = ready ? analysis.summary.get(selected) : null;
-    if (summary && settings.showDests) destinations = destinationsFor(summary);
-    else plainTargets = [...new Set(legalFrom(selected).map(m => m.to))];
+    if (summary && settings.showDests) {
+      destinations = destinationsFor(summary);
+      if (icons) {
+        destIcons = new Map();
+        for (const [sq, m] of destinations) {
+          const icon = m.options.map(o => icons.get(o.uci)).find(Boolean);
+          if (icon) destIcons.set(sq, icon);
+        }
+      }
+    } else {
+      plainTargets = [...new Set(legalFrom(selected).map(m => m.to))];
+    }
+    const focus = focusRating();
+    if (focus && settings.showExplain) {
+      const ex = explain(game.fen(), focus.uci, game.history({ verbose: true }));
+      arrows = [{ from: focus.from, to: focus.to, tone: 'move' }, ...named(ex.arrows)];
+    }
+  } else if (human) {
+    arrows = bookArrows();
+    // What the opponent's last move is up to.
+    const last = lastMove();
+    if (settings.showExplain && last && mode !== 'both') {
+      const theirs = motifsOfMove(parseFen(last.before).board, last.lan).filter(m => m.tone === 'good');
+      arrows.push(...named(theirs.flatMap(m => m.arrows.map(a => ({ from: a[0], to: a[1], tone: 'bad' })))));
+    }
   }
 
   board.render({
@@ -226,9 +336,12 @@ function render() {
     checkSq: checkSquare(),
     selected,
     pieceRings,
+    pieceIcons,
     destinations,
+    destIcons,
     plainTargets,
     highlight: hoverSq,
+    arrows,
   });
 }
 
@@ -239,6 +352,7 @@ function sanMap() {
 }
 
 function renderPieceCard() {
+  renderExplain();
   const card = $('piece-card');
   const summary = selected && analysis?.fen === game.fen() ? analysis.summary.get(selected) : null;
   if (!summary || !settings.showDests) { card.hidden = true; return; }
@@ -247,18 +361,143 @@ function renderPieceCard() {
   const names = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen', k: 'King' };
   $('piece-title').textContent = `${names[piece.type]} on ${selected}`;
   const sans = sanMap();
+  const icons = tacticIcons();
+  const focus = focusRating();
   const list = $('piece-moves');
   list.replaceChildren(...summary.moves.map(m => {
     const li = document.createElement('li');
     if (m.to === hoverSq) li.classList.add('is-hover');
+    if (m === focus && settings.showExplain) li.classList.add('is-focus');
     const cls = CLASSES.find(c => c.id === m.cls);
-    li.innerHTML = `<span class="dot cls-${m.cls}"></span><span><span class="san">${sans.get(m.uci) ?? m.uci}</span>${m.cls === 'best' ? ' <span class="star">★</span>' : ''} <span class="muted">${cls.label}</span></span><span class="score">${formatScore(m.score)}</span><span class="win">${Math.round(m.win)}%</span>`;
-    li.title = `${cls.label}: winning chance ${Math.round(m.win)}% (${m.loss.toFixed(1)} points below the best move)`;
-    li.addEventListener('mouseenter', () => { hoverSq = m.to; render(); });
-    li.addEventListener('mouseleave', () => { hoverSq = null; render(); });
-    li.addEventListener('click', () => { if (humanToMove()) playMove(m.uci); });
+    const icon = icons?.get(m.uci);
+    li.innerHTML = `<span class="dot cls-${m.cls}"></span><span><span class="san">${sans.get(m.uci) ?? m.uci}</span>${m.cls === 'best' ? ' <span class="star">★</span>' : ''}${icon ? ` <span class="legend-icon" title="${icon.label} can be forced">${icon.letter}</span>` : ''} <span class="muted">${cls.label}</span></span><span class="score">${formatScore(m.score)}</span><span class="win">${Math.round(m.win)}%</span>`;
+    li.title = `${cls.label}: winning chance ${Math.round(m.win)}% (${m.loss.toFixed(1)} points below the best move). Click to explain, double-click to play.`;
+    li.addEventListener('mouseenter', () => { hoverSq = m.to; render(); renderExplain(); });
+    li.addEventListener('mouseleave', () => { hoverSq = null; render(); renderExplain(); });
+    li.addEventListener('click', () => { focusUci = m.uci; render(); renderPieceCard(); });
+    li.addEventListener('dblclick', () => { if (humanToMove()) playMove(m.uci); });
     return li;
   }));
+}
+
+// ── Explanations ────────────────────────────────────────────────────────────
+function reasonItems(ex) {
+  const items = [];
+  const push = (tone, text, letter) => items.push({ tone, text, letter });
+  // Notes come first: a tactic forced later in the line, or the opponent's reply.
+  for (const n of ex.notes) push(n.tone, n.text, n.tone === 'good' && ex.forced?.when === 'next' && n === ex.notes[0] ? ex.forced.letter : null);
+  for (const t of ex.tactics) push(t.tone, t.text, TACTIC_ICONS[t.id]?.letter ?? null);
+  for (const p of ex.principles) push(p.tone, p.text, null);
+  return items;
+}
+
+function reasonsHtml(ex) {
+  const items = reasonItems(ex);
+  if (!items.length) return '<ul class="reasons"><li class="empty-row"><span class="empty">No tactics or principle changes stand out; the rating comes from the engine\'s deeper calculation.</span></li></ul>';
+  const mark = { good: '+', bad: '−', neutral: '·' };
+  return '<ul class="reasons">' + items.map(i =>
+    `<li class="tone-${i.tone}${i.letter ? ' tactic' : ''}"><span class="mark">${i.letter ? `<span class="legend-icon">${i.letter}</span>` : mark[i.tone]}</span><span>${i.text}</span></li>`,
+  ).join('') + '</ul>';
+}
+
+function moveHeadHtml(ex, context) {
+  const cls = ex.rating ? CLASSES.find(c => c.id === ex.rating.cls) : null;
+  return `<div class="explain-head"><span class="san">${ex.san}</span>` +
+    (cls ? `<span class="cls" style="color: var(--cls-${cls.id})">${cls.label} · ${formatScore(ex.rating.score)}</span>` : '') +
+    (context ? `<span class="context">${context}</span>` : '') + '</div>';
+}
+
+function renderExplain() {
+  const card = $('explain-card');
+  const body = $('explain-body');
+  if (!settings.showExplain) { card.hidden = true; return; }
+
+  const focus = focusRating();
+  if (focus) {
+    const ex = explain(game.fen(), focus.uci, game.history({ verbose: true }));
+    $('explain-title').textContent = 'Why this move';
+    body.innerHTML = moveHeadHtml(ex) + reasonsHtml(ex) +
+      (ex.comparison ? `<p class="comparison">${ex.comparison.text}</p>` : '') +
+      (humanToMove() ? `<div class="explain-actions"><button class="primary" id="explain-play">Play ${ex.san}</button>${ex.comparison ? `<button id="explain-best">Show ${ex.comparison.san}</button>` : ''}</div>` : '');
+    $('explain-play')?.addEventListener('click', () => playMove(focus.uci));
+    $('explain-best')?.addEventListener('click', () => {
+      const uci = ex.comparison.uci;
+      selected = uci.slice(0, 2);
+      focusUci = uci;
+      hoverSq = null;
+      render();
+      renderPieceCard();
+    });
+    card.hidden = false;
+    return;
+  }
+
+  // Nothing selected: review the last move by each side.
+  const hist = game.history({ verbose: true });
+  const plies = hist.slice(-2);
+  if (!plies.length) { card.hidden = true; return; }
+  $('explain-title').textContent = 'Last moves';
+  body.innerHTML = plies.map((mv, k) => {
+    const idx = hist.length - plies.length + k;
+    const ex = explain(mv.before, mv.lan, hist.slice(0, idx));
+    const yours = mode === 'both' || mv.color === mode;
+    const who = mode === 'both' ? (mv.color === 'w' ? 'White' : 'Black') : yours ? 'Your move' : 'Computer\'s move';
+    const shown = { ...ex, rating: ex.rating ?? null };
+    if (!yours) {
+      // For the opponent's move, keep what it threatens and skip the comparison.
+      shown.notes = [];
+      shown.comparison = null;
+    }
+    return `<div class="review">${moveHeadHtml(shown, who)}${reasonsHtml(shown)}${shown.comparison ? `<p class="comparison">${shown.comparison.text}</p>` : ''}</div>`;
+  }).join('');
+  card.hidden = false;
+}
+
+// ── Openings ────────────────────────────────────────────────────────────────
+function renderOpening() {
+  const body = $('opening-body');
+  if (customStart) {
+    body.innerHTML = '<p class="opening-idea">Started from a loaded position, so the opening library is off.</p>';
+    return;
+  }
+  const history = game.history();
+  const opening = identifyOpening(history);
+  const next = bookContinuations(history);
+  let html = '';
+  if (opening) {
+    html += `<div><span class="opening-name">${opening.name}</span><span class="opening-eco">${opening.eco}</span></div><p class="opening-idea">${opening.idea}</p>`;
+  } else if (!history.length) {
+    html += '<p class="opening-idea">Starting position. Book moves are listed below; pick one to see where it leads.</p>';
+  }
+  if (practice) {
+    const h = history.length;
+    if (!followsPractice()) {
+      const at = history.findIndex((san, i) => i < practice.sans.length && practice.sans[i] !== san);
+      html += `<p class="practice-note">You left the ${practice.name} line at move ${Math.floor(at / 2) + 1}: the book move was <b>${practice.sans[at]}</b>. Undo to try again.</p>`;
+    } else if (h >= practice.sans.length) {
+      html += `<p class="practice-note">${practice.name} line complete. Keep playing from here.</p>`;
+    } else {
+      const yourTurn = mode === 'both' || game.turn() === mode;
+      html += `<p class="practice-note">Practicing ${practice.name}: ${yourTurn ? 'your book move is' : 'the computer will play'} <b>${practice.sans[h]}</b>.</p>`;
+    }
+  }
+  if (next.length) {
+    html += '<ul class="book-moves">' + next.map(c => {
+      const isPractice = practice && followsPractice() && practice.sans[history.length] === c.san;
+      const names = c.lines.slice(0, 3).map(l => l.name).join(', ') + (c.lines.length > 3 ? ', …' : '');
+      return `<li data-san="${c.san}" class="${isPractice ? 'is-practice' : ''}"><span class="san">${c.san}</span><span class="names">${names}</span></li>`;
+    }).join('') + '</ul>';
+  } else if (history.length) {
+    html += `<p class="opening-idea">${opening ? 'No more book moves in the library from here.' : 'Out of the opening library.'}</p>`;
+  }
+  body.innerHTML = html;
+  for (const li of body.querySelectorAll('.book-moves li')) {
+    li.addEventListener('click', () => {
+      if (!humanToMove()) return;
+      const move = game.moves({ verbose: true }).find(m => m.san === li.dataset.san);
+      if (move) playMove(move.lan);
+    });
+  }
 }
 
 function renderHistory() {
@@ -353,6 +592,7 @@ function newGame(fen) {
   searchToken++;
   try {
     game = new Chess(typeof fen === 'string' ? fen : undefined);
+    customStart = typeof fen === 'string' && fen !== DEFAULT_FEN;
   } catch (err) {
     $('status').textContent = `Invalid FEN: ${err.message}`;
     return;
@@ -392,7 +632,7 @@ function initControls() {
     });
     if (id === 'depth') input.addEventListener('change', () => { if (humanToMove()) analyse(); });
   }
-  for (const [id, key] of [['show-rings', 'showRings'], ['show-dests', 'showDests']]) {
+  for (const [id, key] of [['show-rings', 'showRings'], ['show-dests', 'showDests'], ['show-explain', 'showExplain'], ['show-book', 'showBook']]) {
     const input = $(id);
     input.checked = settings[key];
     input.addEventListener('change', () => {
@@ -402,6 +642,17 @@ function initControls() {
       renderPieceCard();
     });
   }
+  const practiceSelect = $('practice');
+  [...OPENINGS].sort((a, b) => a.name.localeCompare(b.name)).forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o.name;
+    opt.textContent = `${o.name} (${o.eco})`;
+    practiceSelect.append(opt);
+  });
+  practiceSelect.addEventListener('change', () => {
+    practice = OPENINGS.find(o => o.name === practiceSelect.value) ?? null;
+    newGame();
+  });
   $('new-game').onclick = () => newGame();
   $('undo').onclick = undo;
   $('flip').onclick = () => { orientation = orientation === 'w' ? 'b' : 'w'; render(); updateEvalBar(); };

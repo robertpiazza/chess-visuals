@@ -77,11 +77,12 @@ export class StockfishEngine {
       const multipv = +(line.match(/ multipv (\d+)/)?.[1] ?? 1);
       const cp = line.match(/ score cp (-?\d+)/);
       const mate = line.match(/ score mate (-?\d+)/);
-      const uci = line.match(/ pv (\S+)/)[1];
+      const pv = line.match(/ pv (.+)$/)[1].trim().split(/\s+/);
+      const uci = pv[0];
       const score = mate ? { mate: +mate[1] } : { cp: +cp[1] };
       // "mate 0" means the side to move is already mated; no moves to rate.
       if (mate && +mate[1] === 0) return;
-      job.scores.set(uci, { uci, score, depth });
+      job.scores.set(uci, { uci, score, pv, depth });
       if (multipv >= job.moveCount && !job.stopping) {
         job.depthDone = depth;
         job.onUpdate?.(this.lines(job), depth);
@@ -94,7 +95,7 @@ export class StockfishEngine {
   }
 
   lines(job) {
-    return [...job.scores.values()].map(({ uci, score }) => ({ uci, score }));
+    return [...job.scores.values()].map(({ uci, score, pv }) => ({ uci, score, pv }));
   }
 }
 

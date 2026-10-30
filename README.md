@@ -19,6 +19,28 @@ A browser chess trainer for standard chess. On your turn, every one of your piec
 
 **Moves played** are annotated with the rating they had when played (`?!`, `?`, `??`), for both you and the computer.
 
+## Tactics and explanations
+
+**Forced-tactic icons.** A lettered purple badge marks moves that force a tactic: **F** fork, **P** pin, **S** skewer, **D** discovered attack or check, **T** trapped piece. A move qualifies when it creates the pattern right away, or when the pattern arrives on your next move in the engine's line after the opponent's best reply (for example, a check that drives the king onto a forking square). Only moves rated Best or Good get a badge, so a fork that loses material doesn't. The badge appears on the target square of the selected piece, in its move list, and on the ring of any piece that has such a move.
+
+**Why this move.** Hover a target square, or click a row in the move list, to see:
+- tactics the move creates: forks, pins, skewers, discovered attacks and checks, trapped pieces, captures and threats, plus pieces it leaves hanging;
+- for a move that loses ground, the opponent's expected reply and what it wins ("Allows Nxg5: wins the queen on g5 for free");
+- principles it follows or breaks: center control, development, castling and king safety, early queen moves, moving a piece twice, trades when ahead or behind in material, the bishop pair, open files and the seventh rank, passed pawns, doubled or isolated pawns, piece activity, king activity in the endgame;
+- a comparison with the engine's preferred move: what that move does that yours doesn't, or the line where the difference shows.
+
+Arrows on the board show the same thing: teal for the move, purple for your tactic, red (dashed) for the opponent's answer. With nothing selected, the card reviews the last move by each side, and red arrows show what the opponent's last move threatens.
+
+These are static pattern checks on the position (`web/js/tactics.js`, `web/js/principles.js`, combined in `web/js/explain.js`). They describe what a move sets up; the engine rating says whether it works.
+
+## Openings library
+
+`web/js/openings.js` holds about 70 named lines (Ruy Lopez, Italian, Sicilian Najdorf/Dragon, French, Caro-Kann, Queen's Gambit, King's Indian, Nimzo-Indian, London, English and others), each with its ECO code and a one-line idea.
+
+- The **Opening** card names the current opening and lists the book moves from here, with the openings each one leads to. Click one to play it. Book moves also show as blue arrows.
+- **Practice an opening** starts a game where the computer follows the chosen line and the card shows your next book move. If you leave the line it tells you where and what the book move was.
+- Outside practice, the computer picks a random book move while one is available (skipping any the engine rates a mistake), so games start from varied, sound openings.
+
 ### How moves are rated
 
 The engine scores every legal move (Stockfish MultiPV set to the number of legal moves). Each score is converted to a winning chance with Lichess's curve, `win% = 50 + 50 · (2 / (1 + e^(−0.00368208 · cp)) − 1)`, and a move's class comes from how many win% points it drops compared to the best move:
@@ -45,7 +67,7 @@ The computer opponent uses the same ratings. "Computer strength" 20 always plays
 - **Game**: play White or Black against the computer, or "Both sides" to rate moves for whoever is to move.
 - **Undo** steps back to your previous turn. **Flip** turns the board.
 - **Load position (FEN)** starts from any position.
-- Click or drag pieces to move. `Esc` clears the selection.
+- Click or drag pieces to move. In the selected piece's move list, click a row to explain it and double-click to play it. `Esc` clears the selection.
 
 ## Running locally
 
@@ -75,6 +97,10 @@ web/
     ├── main.js              # game flow, computer opponent, side panel
     ├── board.js             # SVG board, piece rings, move markers, drag/click input
     ├── analysis.js          # win%, move classes, per-piece summaries
+    ├── tactics.js           # fork/pin/skewer/discovery/trap/hanging detection
+    ├── principles.js        # positional commentary
+    ├── explain.js           # combines both with the engine line; forced-tactic icons
+    ├── openings.js          # opening library and lookup
     └── engine/
         ├── engine.js        # Stockfish UCI wrapper and built-in engine wrapper
         ├── builtin-worker.js

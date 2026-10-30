@@ -43,7 +43,7 @@ export class BoardView {
     this.svg = el('svg', { viewBox: '0 0 800 800', class: 'board', role: 'img', 'aria-label': 'Chess board' });
     container.appendChild(this.svg);
     this.layers = {};
-    for (const name of ['squares', 'marks', 'rings', 'pieces', 'dests', 'labels', 'drag']) {
+    for (const name of ['squares', 'marks', 'rings', 'pieces', 'dests', 'arrows', 'labels', 'drag']) {
       this.layers[name] = el('g', { class: `layer-${name}` }, this.svg);
     }
     this.orientation = 'w';
@@ -129,7 +129,10 @@ export class BoardView {
   }
 
   // state: { pieces: chess.board(), orientation, lastMove, checkSq, selected,
-  //          pieceRings, destinations, plainTargets, highlight }
+  //          pieceRings, pieceIcons, destinations, destIcons, plainTargets,
+  //          highlight, arrows }
+  // pieceIcons / destIcons: Map square → { letter, label } for forced tactics.
+  // arrows: [{ from, to, tone: 'good' | 'bad' | 'neutral' | 'book' | 'move', dashed }]
   render(state) {
     this.orientation = state.orientation;
     for (const layer of Object.values(this.layers)) {
@@ -139,6 +142,36 @@ export class BoardView {
     this.drawRings(state);
     this.drawPieces(state);
     this.drawDestinations(state);
+    this.drawArrows(state);
+  }
+
+  // Small lettered badge in a square's top-left corner marking a forced tactic.
+  drawIcon(parent, x, y, icon, scale = 1) {
+    const g = el('g', { class: 'tactic-badge', transform: `translate(${x + 14} ${y + 14}) scale(${scale})` }, parent);
+    el('title', {}, g).textContent = `${icon.label} can be forced`;
+    el('circle', { r: 11 }, g);
+    el('text', { y: 5, 'text-anchor': 'middle' }, g).textContent = icon.letter;
+  }
+
+  drawArrows({ arrows }) {
+    if (!arrows) return;
+    const seen = new Set();
+    for (const a of arrows) {
+      const key = `${a.from}${a.to}${a.tone}`;
+      if (a.from === a.to || seen.has(key)) continue;
+      seen.add(key);
+      const [x0, y0] = this.squareOrigin(a.from).map(v => v + 50);
+      const [x1, y1] = this.squareOrigin(a.to).map(v => v + 50);
+      const len = Math.hypot(x1 - x0, y1 - y0);
+      const ux = (x1 - x0) / len, uy = (y1 - y0) / len;
+      const head = 22, start = 18, end = 14;
+      const sx = x0 + ux * start, sy = y0 + uy * start;
+      const hx = x1 - ux * end, hy = y1 - uy * end;
+      const bx = hx - ux * head, by = hy - uy * head;
+      const g = el('g', { class: `arrow arrow-${a.tone}` + (a.dashed ? ' is-dashed' : '') }, this.layers.arrows);
+      el('line', { x1: sx, y1: sy, x2: bx, y2: by }, g);
+      el('path', { d: `M ${hx} ${hy} L ${bx - uy * 13} ${by + ux * 13} L ${bx + uy * 13} ${by - ux * 13} Z` }, g);
+    }
   }
 
   drawSquares({ lastMove, checkSq, selected }) {
@@ -164,7 +197,7 @@ export class BoardView {
     }
   }
 
-  drawRings({ pieceRings, selected }) {
+  drawRings({ pieceRings, pieceIcons, selected }) {
     if (!pieceRings) return;
     for (const [sq, summary] of pieceRings) {
       const [x, y] = this.squareOrigin(sq);
@@ -188,6 +221,8 @@ export class BoardView {
       if (summary.best.cls === 'best') {
         el('path', { d: STAR_PATH, transform: `translate(${x + 88} ${y + 12})`, class: 'best-star' }, g);
       }
+      const icon = pieceIcons?.get(sq);
+      if (icon) this.drawIcon(g, x, y, icon);
     }
   }
 
@@ -206,7 +241,7 @@ export class BoardView {
     }
   }
 
-  drawDestinations({ destinations, plainTargets, pieces, highlight }) {
+  drawDestinations({ destinations, destIcons, plainTargets, pieces, highlight }) {
     const occupied = new Set(pieces.flat().filter(Boolean).map(p => p.square));
     if (plainTargets) {
       for (const sq of plainTargets) {
@@ -232,6 +267,8 @@ export class BoardView {
       if (m.cls === 'best') {
         el('path', { d: STAR_PATH, transform: `translate(${x + 86} ${y + 14}) scale(1.2)`, class: 'best-star' }, g);
       }
+      const icon = destIcons?.get(sq);
+      if (icon) this.drawIcon(g, x, y, icon, 1.2);
       const label = formatScore(m.score);
       const w = 10 + label.length * 10;
       el('rect', { x: cx - w / 2, y: y + 76, width: w, height: 22, rx: 11, class: 'dest-pill' }, g);

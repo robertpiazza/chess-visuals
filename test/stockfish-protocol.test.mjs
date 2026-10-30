@@ -43,8 +43,8 @@ test('collects one score per root move, reports each finished depth', async () =
   assert.equal(result.depth, 2);
   assert.deepEqual(updates, [[1, 2], [2, 2]]);
   assert.deepEqual(result.lines, [
-    { uci: 'e2e4', score: { cp: 28 } },
-    { uci: 'a2a3', score: { mate: -3 } },
+    { uci: 'e2e4', score: { cp: 28 }, pv: ['e2e4', 'e7e5'] },
+    { uci: 'a2a3', score: { mate: -3 }, pv: ['a2a3', 'd8h4'] },
   ]);
 });
 
@@ -60,5 +60,5 @@ test('a new analysis stops the running one first', async () => {
   assert.ok(w.sent.includes('stop'));
   assert.equal(w.sent.at(-2), 'position fen fen-2');
   w.reply('info depth 3 multipv 1 score cp 5 pv g1f3', 'bestmove g1f3');
-  assert.deepEqual((await second).lines, [{ uci: 'g1f3', score: { cp: 5 } }]);
+  assert.deepEqual((await second).lines, [{ uci: 'g1f3', score: { cp: 5 }, pv: ['g1f3'] }]);
 });

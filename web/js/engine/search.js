@@ -139,6 +139,7 @@ export class Searcher {
     const inCheck = pos.inCheck();
     // Search one ply deeper when in check so mates aren't cut off by the horizon.
     if (inCheck) depth++;
+    this.pv[ply] = [];
     if (depth <= 0) return this.quiesce(alpha, beta);
     let best = -Infinity;
     let legal = 0;
@@ -146,10 +147,15 @@ export class Searcher {
       pos.makeMove(m);
       if (pos.inCheck(pos.side ^ 1)) { pos.unmakeMove(m); continue; }
       legal++;
+      this.pv[ply + 1] = [];
       const s = -this.negamax(depth - 1, -beta, -alpha, ply + 1);
       pos.unmakeMove(m);
       if (s > best) best = s;
-      if (s > alpha) alpha = s;
+      if (s > alpha) {
+        alpha = s;
+        // Triangular PV: this move followed by the child's line.
+        this.pv[ply] = [m, ...this.pv[ply + 1]];
+      }
       if (alpha >= beta) break;
     }
     if (!legal) return inCheck ? -MATE + ply : 0;
@@ -161,9 +167,12 @@ export class Searcher {
     const lines = [];
     for (const m of ordered(this.pos.legalMoves())) {
       this.pos.makeMove(m);
+      this.pv = [];
       const s = -this.negamax(depth - 1, -Infinity, Infinity, 1);
       this.pos.unmakeMove(m);
-      lines.push({ uci: moveToUci(m), score: toUciScore(s) });
+      const uci = moveToUci(m);
+      // Each root move gets a full-window search, so its line is exact.
+      lines.push({ uci, score: toUciScore(s), pv: [uci, ...(this.pv[1] ?? []).map(moveToUci)] });
     }
     return lines;
   }

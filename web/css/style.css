@@ -247,3 +247,51 @@ summary { cursor: pointer; font-size: 14px; color: var(--muted); }
   .promo button { width: 60px; }
   .promo button img { width: 46px; height: 46px; }
 }
+
+/* Forced-tactic badges */
+.tactic-badge circle { fill: #7c3aed; stroke: #fff; stroke-width: 2; }
+.tactic-badge text { fill: #fff; font-size: 14px; font-weight: 700; }
+.dest .tactic-badge { pointer-events: none; }
+
+/* Arrows */
+.arrow { pointer-events: none; opacity: 0.85; }
+.arrow line { stroke-width: 11; stroke-linecap: round; }
+.arrow.is-dashed line { stroke-dasharray: 14 10; stroke-linecap: butt; }
+.arrow-good line { stroke: #7c3aed; } .arrow-good path { fill: #7c3aed; }
+.arrow-bad line { stroke: #dc2626; } .arrow-bad path { fill: #dc2626; }
+.arrow-neutral line { stroke: #475569; } .arrow-neutral path { fill: #475569; }
+.arrow-move line { stroke: #0f766e; } .arrow-move path { fill: #0f766e; }
+.arrow-book line { stroke: #2563eb; } .arrow-book path { fill: #2563eb; }
+.arrow-book { opacity: 0.6; }
+
+/* Explanation card */
+.explain-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.explain-head .san { font-size: 18px; font-weight: 700; }
+.explain-head .cls { font-size: 13px; font-weight: 600; }
+.explain-head .context { font-size: 12px; color: var(--muted); width: 100%; }
+.reasons { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.reasons li { display: grid; grid-template-columns: 18px 1fr; gap: 4px; }
+.reasons .mark { font-weight: 700; text-align: center; }
+.reasons .tone-good .mark { color: var(--cls-best); }
+.reasons .tone-bad .mark { color: var(--cls-blunder); }
+.reasons .tone-neutral .mark { color: var(--muted); }
+.reasons .tactic .mark { color: #7c3aed; }
+.reasons .empty { color: var(--muted); font-style: italic; display: block; }
+.comparison { margin: 8px 0 0; font-size: 14px; padding: 8px 10px; border-radius: 8px; background: var(--bg); }
+.explain-actions { margin-top: 8px; display: flex; gap: 8px; }
+.review + .review { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+
+/* Openings card */
+.opening-name { font-weight: 700; }
+.opening-eco { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.opening-idea { font-size: 13px; color: var(--muted); margin: 4px 0 8px; }
+.book-moves { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.book-moves li { display: flex; gap: 8px; align-items: baseline; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+.book-moves li:hover { background: var(--bg); }
+.book-moves .san { font-weight: 700; min-width: 3.5em; color: #2563eb; }
+.book-moves .names { color: var(--muted); font-size: 13px; }
+.book-moves li.is-practice .san::after { content: ' ←'; }
+.practice-note { font-size: 13px; margin: 6px 0 0; }
+.legend-icon { display: inline-flex; width: 16px; height: 16px; border-radius: 50%; background: #7c3aed; color: #fff; font-size: 10px; font-weight: 700; align-items: center; justify-content: center; }
+.move-ratings li.is-focus { box-shadow: inset 0 0 0 2px var(--accent); }
+.reasons li.empty-row { display: block; }
