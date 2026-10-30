@@ -82,3 +82,11 @@ test('scores display from White\'s side', async () => {
   assert.equal(formatWhite({ mate: 2 }, 'b'), '#-2');  // Black mates in 2
   assert.equal(formatWhite({ mate: -3 }, 'b'), '#3');  // White mates in 3
 });
+
+test('comparison scores get a second decimal only when one would hide the difference', async () => {
+  const { formatPair } = await import('../web/js/analysis.js');
+  assert.deepEqual(formatPair({ cp: 30 }, { cp: 26 }, 'w'), ['+0.30', '+0.26']);
+  assert.deepEqual(formatPair({ cp: 30 }, { cp: 10 }, 'w'), ['+0.3', '+0.1']);
+  assert.deepEqual(formatPair({ cp: 30 }, { cp: 30 }, 'w'), ['+0.3', '+0.3']);   // truly equal: leave as is
+  assert.deepEqual(formatPair({ cp: -304 }, { cp: -298 }, 'b'), ['+3.04', '+2.98']);
+});

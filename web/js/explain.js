@@ -5,7 +5,7 @@
 import { Chess } from '../vendor/chess.js';
 import { parseFen, applyUci, motifsOfMove as rawMotifs, sqIndex, materialBalance, enPrise, VALUE, NAME } from './tactics.js';
 import { principlesOfMove } from './principles.js';
-import { formatWhite } from './analysis.js';
+import { formatWhite, formatPair } from './analysis.js';
 
 // Tactics that get a marker on the board when a move forces them.
 export const TACTIC_ICONS = {
@@ -281,7 +281,7 @@ export function explainMove(fen, uci, ratings, history = []) {
       uci: best.uci,
       text: rating.cls === 'best'
         ? `Rated Best along with the engine's top choice, ${bestSan} (${formatWhite(best.score, mover)}).`
-        : `Engine prefers ${bestSan} (${formatWhite(best.score, mover)} vs ${formatWhite(rating.score, mover)})` +
+        : `Engine prefers ${bestSan} (${formatPair(best.score, rating.score, mover).join(' vs ')})` +
         (reasons.length
           ? `. What it does that yours doesn't: ${[...new Set(reasons)].slice(0, 3).join('; ')}.`
           : `. The difference shows in the follow-up: ${line}.`),

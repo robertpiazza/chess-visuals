@@ -44,14 +44,22 @@ export function toWhite(score, mover) {
   return score.mate != null ? { mate: -score.mate } : { cp: -score.cp };
 }
 
-export function formatWhite(score, mover) {
-  return formatScore(toWhite(score, mover));
+export function formatWhite(score, mover, digits = 1) {
+  return formatScore(toWhite(score, mover), digits);
 }
 
-export function formatScore(score) {
+export function formatScore(score, digits = 1) {
   if (score.mate != null) return (score.mate > 0 ? '#' : '#-') + Math.abs(score.mate);
   const pawns = score.cp / 100;
-  return (pawns > 0 ? '+' : '') + pawns.toFixed(1);
+  return (pawns > 0 ? '+' : '') + pawns.toFixed(digits);
+}
+
+// Two scores for side-by-side comparison, with a second decimal when one
+// decimal would make different scores look the same (+0.30 vs +0.26).
+export function formatPair(a, b, mover) {
+  const one = [formatWhite(a, mover), formatWhite(b, mover)];
+  const differ = a.mate !== b.mate || a.cp !== b.cp;
+  return one[0] === one[1] && differ ? [formatWhite(a, mover, 2), formatWhite(b, mover, 2)] : one;
 }
 
 // lines: [{ uci, score: { cp } | { mate }, pv? }] from the side to move's view.
