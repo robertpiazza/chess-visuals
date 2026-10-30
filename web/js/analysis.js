@@ -36,6 +36,18 @@ export function scoreKey(score) {
   return score.cp;
 }
 
+// Ratings keep scores from the mover's side (that's what the classes and
+// win% are based on). Everything shown to the user uses the standard
+// convention instead: + is good for White, − for Black.
+export function toWhite(score, mover) {
+  if (mover === 'w') return score;
+  return score.mate != null ? { mate: -score.mate } : { cp: -score.cp };
+}
+
+export function formatWhite(score, mover) {
+  return formatScore(toWhite(score, mover));
+}
+
 export function formatScore(score) {
   if (score.mate != null) return (score.mate > 0 ? '#' : '#-') + Math.abs(score.mate);
   const pawns = score.cp / 100;

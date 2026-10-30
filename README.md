@@ -13,7 +13,7 @@ A browser chess trainer for standard chess. On your turn, every one of your piec
 **Selected piece**
 - Each target square shows a disc tinted by the move's quality and an arc filled to your winning chance after that move.
 - Targets rated Best also get a ★, as do their rows in the side panel.
-- The label under it is the engine score from your side (+1.0 is a pawn up for you, `#3` is mate in 3).
+- The label under it is the engine score in the standard convention, from White's side: +1.0 means White is about a pawn better, −1.0 Black, `#3` White mates in 3, `#-3` Black mates in 3. The win% arc and the percentages in the move list stay from the mover's side.
 - The side panel lists the piece's moves with SAN, class, score and win %. Hover a row to highlight the square; click a row to play it.
 - Promotion shows a picker with each choice rated.
 

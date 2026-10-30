@@ -5,7 +5,7 @@
 import { Chess } from '../vendor/chess.js';
 import { parseFen, applyUci, motifsOfMove as rawMotifs, sqIndex, materialBalance, enPrise, VALUE, NAME } from './tactics.js';
 import { principlesOfMove } from './principles.js';
-import { formatScore } from './analysis.js';
+import { formatWhite } from './analysis.js';
 
 // Tactics that get a marker on the board when a move forces them.
 export const TACTIC_ICONS = {
@@ -187,7 +187,7 @@ function followUpTactic(board, rating) {
 // fen: position before the move. ratings: Map from analysis.rateMoves.
 // history: chess.js verbose history up to this position (may be empty).
 export function explainMove(fen, uci, ratings, history = []) {
-  const { board } = parseFen(fen);
+  const { board, turn: mover } = parseFen(fen);
   const rating = ratings.get(uci);
   const [san] = sanLine(fen, [uci]);
   let tactics = motifsOfMove(board, uci);
@@ -268,13 +268,13 @@ export function explainMove(fen, uci, ratings, history = []) {
       san: bestSan,
       uci: best.uci,
       text: rating.cls === 'best'
-        ? `Rated Best along with the engine's top choice, ${bestSan} (${formatScore(best.score)}).`
-        : `Engine prefers ${bestSan} (${formatScore(best.score)} vs ${formatScore(rating.score)})` +
+        ? `Rated Best along with the engine's top choice, ${bestSan} (${formatWhite(best.score, mover)}).`
+        : `Engine prefers ${bestSan} (${formatWhite(best.score, mover)} vs ${formatWhite(rating.score, mover)})` +
         (reasons.length
           ? `. What it does that yours doesn't: ${[...new Set(reasons)].slice(0, 3).join('; ')}.`
           : `. The difference shows in the follow-up: ${line}.`),
     };
   }
 
-  return { uci, san, rating, tactics, principles, notes, comparison, forced, arrows };
+  return { uci, san, mover, rating, tactics, principles, notes, comparison, forced, arrows };
 }

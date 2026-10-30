@@ -74,3 +74,11 @@ test('Best is only the top score or a tie with it', () => {
   assert.equal(mates.get('a1a8').cls, 'best');
   assert.equal(mates.get('h1h8').cls, 'good');
 });
+
+test('scores display from White\'s side', async () => {
+  const { formatWhite } = await import('../web/js/analysis.js');
+  assert.equal(formatWhite({ cp: 120 }, 'w'), '+1.2');
+  assert.equal(formatWhite({ cp: 120 }, 'b'), '-1.2'); // good for Black shows as negative
+  assert.equal(formatWhite({ mate: 2 }, 'b'), '#-2');  // Black mates in 2
+  assert.equal(formatWhite({ mate: -3 }, 'b'), '#3');  // White mates in 3
+});

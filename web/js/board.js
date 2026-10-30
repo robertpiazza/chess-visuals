@@ -8,7 +8,7 @@
 //                  tinted by quality, an arc filled to the win% after the
 //                  move, and the engine score.
 
-import { formatScore } from './analysis.js';
+import { formatWhite } from './analysis.js';
 import { hasGlyph, glyphMarkup, iconTitle } from './icons.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -131,7 +131,9 @@ export class BoardView {
 
   // state: { pieces: chess.board(), orientation, lastMove, checkSq, selected,
   //          pieceRings, pieceIcons, destinations, destIcons, plainTargets,
-  //          highlight, arrows }
+  //          highlight, arrows, mover }
+  // mover: 'w' or 'b', the side the move ratings belong to (scores are shown
+  // from White's side).
   // pieceIcons / destIcons: Map square → { letter, glyph, label } for forced tactics.
   // arrows: [{ from, to, tone: 'good' | 'bad' | 'neutral' | 'book' | 'move', dashed }]
   render(state) {
@@ -250,7 +252,7 @@ export class BoardView {
     }
   }
 
-  drawDestinations({ destinations, destIcons, plainTargets, pieces, highlight }) {
+  drawDestinations({ destinations, destIcons, plainTargets, pieces, highlight, mover }) {
     const occupied = new Set(pieces.flat().filter(Boolean).map(p => p.square));
     if (plainTargets) {
       for (const sq of plainTargets) {
@@ -278,7 +280,7 @@ export class BoardView {
       }
       const icon = destIcons?.get(sq);
       if (icon) this.drawIcon(g, x, y, icon, 1.2);
-      const label = formatScore(m.score);
+      const label = formatWhite(m.score, mover);
       const w = 10 + label.length * 10;
       // Shift the score pill right if needed to clear a bottom-left badge.
       const px = icon ? Math.max(cx - w / 2, x + 30) : cx - w / 2;

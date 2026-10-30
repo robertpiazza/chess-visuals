@@ -2,7 +2,7 @@ import { Chess, DEFAULT_POSITION as DEFAULT_FEN } from '../vendor/chess.js';
 import { BoardView } from './board.js';
 import { createEngine } from './engine/engine.js';
 import {
-  CLASSES, rateMoves, summarizePieces, destinationsFor, formatScore, winPercent, scoreKey,
+  CLASSES, rateMoves, summarizePieces, destinationsFor, formatScore, formatWhite, winPercent, scoreKey,
 } from './analysis.js';
 import { explainMove, forcedTactic, TACTIC_ICONS } from './explain.js';
 import { badgeHtml } from './icons.js';
@@ -338,6 +338,7 @@ function render() {
   }
 
   board.render({
+    mover: game.turn(),
     pieces: game.board(),
     orientation,
     lastMove: lastMove(),
@@ -378,7 +379,7 @@ function renderPieceCard() {
     if (m === focus && settings.showExplain) li.classList.add('is-focus');
     const cls = CLASSES.find(c => c.id === m.cls);
     const icon = icons?.get(m.uci);
-    li.innerHTML = `<span class="dot cls-${m.cls}"></span><span><span class="san">${sans.get(m.uci) ?? m.uci}</span>${m.cls === 'best' ? ' <span class="star">★</span>' : ''}${icon ? ` ${badgeHtml(icon)}` : ''} <span class="muted">${cls.label}</span></span><span class="score">${formatScore(m.score)}</span><span class="win">${Math.round(m.win)}%</span>`;
+    li.innerHTML = `<span class="dot cls-${m.cls}"></span><span><span class="san">${sans.get(m.uci) ?? m.uci}</span>${m.cls === 'best' ? ' <span class="star">★</span>' : ''}${icon ? ` ${badgeHtml(icon)}` : ''} <span class="muted">${cls.label}</span></span><span class="score">${formatWhite(m.score, game.turn())}</span><span class="win">${Math.round(m.win)}%</span>`;
     li.title = `${cls.label}: winning chance ${Math.round(m.win)}% (${m.loss.toFixed(1)} points below the best move). Click to explain, double-click to play.`;
     li.addEventListener('mouseenter', () => { hoverSq = m.to; render(); renderExplain(); });
     li.addEventListener('mouseleave', () => { hoverSq = null; render(); renderExplain(); });
@@ -417,7 +418,7 @@ function reasonsHtml(ex) {
 function moveHeadHtml(ex, context) {
   const cls = ex.rating ? CLASSES.find(c => c.id === ex.rating.cls) : null;
   return `<div class="explain-head"><span class="san">${ex.san}</span>` +
-    (cls ? `<span class="cls" style="color: var(--cls-${cls.id})">${cls.label} · ${formatScore(ex.rating.score)}</span>` : '') +
+    (cls ? `<span class="cls" style="color: var(--cls-${cls.id})">${cls.label} · ${formatWhite(ex.rating.score, ex.mover)}</span>` : '') +
     (context ? `<span class="context">${context}</span>` : '') + '</div>';
 }
 
@@ -515,22 +516,23 @@ function renderOpening() {
 }
 
 function renderHistory() {
-  const hist = game.history();
+  const hist = game.history({ verbose: true });
   const list = $('history');
   const items = [];
+  const ply = i => plyHtml(hist[i].san, plyRatings[i], hist[i].color);
   for (let i = 0; i < hist.length; i += 2) {
     const li = document.createElement('li');
-    li.innerHTML = `<span class="num">${i / 2 + 1}.</span>` + plyHtml(hist[i], plyRatings[i]) + (hist[i + 1] ? plyHtml(hist[i + 1], plyRatings[i + 1]) : '<span></span>');
+    li.innerHTML = `<span class="num">${i / 2 + 1}.</span>` + ply(i) + (hist[i + 1] ? ply(i + 1) : '<span></span>');
     items.push(li);
   }
   list.replaceChildren(...items);
   list.scrollTop = list.scrollHeight;
 }
 
-function plyHtml(san, rating) {
+function plyHtml(san, rating, mover) {
   if (!rating) return `<span class="ply"><span class="dot cls-none"></span>${san}</span>`;
   const cls = CLASSES.find(c => c.id === rating.cls);
-  return `<span class="ply" title="${cls.label} (${formatScore(rating.score)})"><span class="dot cls-${rating.cls}"></span>${san}<span class="sym cls-${rating.cls}">${cls.symbol}</span></span>`;
+  return `<span class="ply" title="${cls.label} (${formatWhite(rating.score, mover)})"><span class="dot cls-${rating.cls}"></span>${san}<span class="sym cls-${rating.cls}">${cls.symbol}</span></span>`;
 }
 
 function updateStatus() {
@@ -588,7 +590,7 @@ function showPromotion(from, to, options) {
     const r = ratings.get(move.lan);
     const btn = document.createElement('button');
     if (r) btn.style.borderColor = `var(--cls-${r.cls})`;
-    btn.innerHTML = `<img src="pieces/${color}${p.toUpperCase()}.svg" alt="${p}"><span>${r ? formatScore(r.score) : ''}</span>`;
+    btn.innerHTML = `<img src="pieces/${color}${p.toUpperCase()}.svg" alt="${p}"><span>${r ? formatWhite(r.score, color) : ''}</span>`;
     btn.onclick = () => playMove(move.lan);
     return btn;
   }));
