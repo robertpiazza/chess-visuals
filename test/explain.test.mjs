@@ -220,3 +220,8 @@ test('opposition: direct and distant in a pawn ending only', () => {
   assert.equal(opp('8/8/4k3/8/8/4K3/4P3/8 w - - 0 1', 'e3d4'), undefined);
   assert.equal(opp('8/8/4k3/8/8/4K3/4P3/R7 w - - 0 1', 'e3e4'), undefined); // a rook on the board: not a pawn ending
 });
+
+test('a rook behind a passed pawn is not called passive', () => {
+  const fen = '6k1/5ppp/8/3P4/8/8/5PPP/R5K1 w - - 0 1';
+  assert.ok(!principlesOfMove(parseFen(fen).board, 'a1d1', { fen, history: [] }).some(p => p.id === 'passive'));
+});

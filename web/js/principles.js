@@ -397,5 +397,7 @@ export function principlesOfMove(board, uci, ctx) {
     }
   }
 
+  // A rook behind a passed pawn may see fewer squares, but it's where it belongs.
+  if (out.some(o => o.id === 'rook-passer' && o.tone === 'good')) return out.filter(o => o.id !== 'passive');
   return out;
 }
