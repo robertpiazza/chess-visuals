@@ -188,3 +188,19 @@ test('overloaded piece: Rb1 leaves the d7 knight guarding both b8 and f6', () =>
   const r = rateMoves([{ uci: 'a1b1', score: { cp: 300 }, pv: ['a1b1', 'e8e7', 'b1b8', 'd7b8', 'g5f6'] }]);
   assert.equal(forcedTactic(fen, r.get('a1b1')).id, 'overload');
 });
+
+test('outpost: Nd5 with no black c- or e-pawn able to chase it; not with a c-pawn that can play ...c6', () => {
+  const yes = 'r1bqkb1r/pp3ppp/2np1n2/4p3/4P3/2N5/PPP1NPPP/R1BQKB1R w KQkq - 0 7';
+  assert.ok(principlesOfMove(parseFen(yes).board, 'c3d5', { fen: yes, history: [] }).some(p => p.id === 'outpost'));
+  const no = 'r1bqkb1r/ppp2ppp/2np1n2/4p3/4P3/2N5/PPP1NPPP/R1BQKB1R w KQkq - 0 7';
+  assert.ok(!principlesOfMove(parseFen(no).board, 'c3d5', { fen: no, history: [] }).some(p => p.id === 'outpost'));
+});
+
+test('bad bishop: e5 in the French locks d4/e5 on the c1 bishop\'s colour; exd5 and 1.e4 do not', () => {
+  const fr = 'rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 0 3';
+  const bad = principlesOfMove(parseFen(fr).board, 'e4e5', { fen: fr, history: [] }).find(p => p.id === 'bad-bishop');
+  assert.match(bad.text, /2 of your pawns are now fixed on the same colour as your bishop on c1/);
+  assert.ok(!principlesOfMove(parseFen(fr).board, 'e4d5', { fen: fr, history: [] }).some(p => p.id === 'bad-bishop'));
+  const start = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  assert.ok(!principlesOfMove(parseFen(start).board, 'e2e4', { fen: start, history: [] }).some(p => p.id === 'bad-bishop'));
+});

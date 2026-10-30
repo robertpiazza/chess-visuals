@@ -38,6 +38,31 @@ function lineName(sq, df, dr, color) {
   return `the ${sqName(ends[0])}–${sqName(ends[1])} diagonal`;
 }
 
+// A square in the opponent's half, guarded by our pawn, that no enemy pawn
+// can ever attack.
+function isOutpost(board, sq, color) {
+  const f = sq & 7, r = sq >> 3;
+  const rel = color === 'w' ? r : 7 - r; // 0 = our back rank
+  if (rel < 3 || rel > 5) return false;
+  const back = color === 'w' ? -1 : 1;
+  const guarded = [-1, 1].some(df => {
+    const t = (r + back) * 8 + f + df;
+    return onBoard(f + df, r + back) && board[t]?.type === 'p' && board[t].color === color;
+  });
+  if (!guarded) return false;
+  // Enemy pawns on neighbouring files further up the board (from our side)
+  // could one day attack the square.
+  for (const df of [-1, 1]) {
+    if (!onBoard(f + df, r)) continue;
+    for (let rr = 0; rr < 8; rr++) {
+      const ahead = color === 'w' ? rr > r : rr < r;
+      const p = board[rr * 8 + f + df];
+      if (ahead && p?.type === 'p' && p.color !== color) return false;
+    }
+  }
+  return true;
+}
+
 function firstPiece(board, sq, df, dr) {
   for (let f = (sq & 7) + df, r = (sq >> 3) + dr; onBoard(f, r); f += df, r += dr) {
     if (board[r * 8 + f]) return r * 8 + f;
@@ -274,6 +299,36 @@ export function principlesOfMove(board, uci, ctx) {
       else if (bat.aim.kind === 'piece') text += `${rooks ? ',' : ''} aimed at the ${NAME[after[bat.aim.sq].type]} on ${sqName(bat.aim.sq)}`;
       add('battery', 'good', text);
       out.at(-1).arrows = [[bat.back, bat.aim.sq]];
+    }
+  }
+
+  // Outpost: a knight in the opponent's half on a square our pawn guards
+  // and no enemy pawn can ever attack (none left on the neighbouring files
+  // ahead of it).
+  if (piece.type === 'n' && isOutpost(after, to, us) && !enPrise(after, to)) {
+    add('outpost', 'good', `Plants the knight on an outpost: ${sqName(to)} is guarded by a pawn and no enemy pawn can chase it away`);
+  }
+
+  // Bad bishop: the move locks one of our central pawns (c–f files) on our
+  // bishop's square colour, blocked head-on by an enemy pawn, so that at
+  // least two such fixed pawns now wall the bishop in. Pawns that can still
+  // move aren't the problem; fixed ones are.
+  if (piece.type === 'p') {
+    const shade = sq => ((sq & 7) + (sq >> 3)) % 2; // 0 = dark, 1 = light
+    const step = us === 'w' ? 8 : -8;
+    const fixedOn = (bd, colour) => bd.reduce((n, p, i) => n + (
+      p?.color === us && p.type === 'p' && (i & 7) >= 2 && (i & 7) <= 5 && shade(i) === colour &&
+      bd[i + step]?.type === 'p' && bd[i + step].color === them ? 1 : 0), 0);
+    const movedFixed = after[to + step]?.type === 'p' && after[to + step].color === them && (to & 7) >= 2 && (to & 7) <= 5;
+    const bishops = after.map((p, i) => (p?.color === us && p.type === 'b' ? i : -1)).filter(i => i >= 0);
+    for (const b of bishops) {
+      if (!movedFixed || shade(to) !== shade(b)) continue;
+      if (bishops.some(o => o !== b && shade(o) === shade(b))) continue; // two same-coloured bishops: skip
+      const n = fixedOn(after, shade(b));
+      if (n >= 2 && n > fixedOn(board, shade(b))) {
+        const colour = shade(b) ? 'light' : 'dark';
+        add('bad-bishop', 'bad', `Locks the center on ${colour} squares: ${n} of your pawns are now fixed on the same colour as your bishop on ${sqName(b)}, limiting it (a "bad bishop")`);
+      }
     }
   }
 
