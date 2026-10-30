@@ -3,7 +3,7 @@
 // engine's preferred move has that this one lacks.
 
 import { Chess } from '../vendor/chess.js';
-import { parseFen, applyUci, motifsOfMove, sqIndex } from './tactics.js';
+import { parseFen, applyUci, motifsOfMove, sqIndex, materialBalance, enPrise, VALUE } from './tactics.js';
 import { principlesOfMove } from './principles.js';
 import { formatScore } from './analysis.js';
 
@@ -35,15 +35,46 @@ export function sanLine(fen, ucis) {
 
 const lowerFirst = s => s[0].toLowerCase() + s.slice(1);
 
+// Does the engine's own line back the tactic up: a mate, or at least two
+// pawns of material won by the end of the line. If the line stops right
+// after one of our captures and the capturing piece can be taken back, that
+// piece is counted as lost, so a line ending mid-exchange isn't a win.
+export function lineWins(board, rating) {
+  if (rating.score.mate != null) return rating.score.mate > 0;
+  const us = board[sqIndex(rating.uci.slice(0, 2))].color;
+  const start = materialBalance(board, us);
+  let b = board;
+  let lastCapture = null;
+  try {
+    for (const uci of rating.pv) {
+      const to = sqIndex(uci.slice(2, 4));
+      lastCapture = b[to] ? to : null;
+      b = applyUci(b, uci);
+    }
+  } catch {
+    return false;
+  }
+  let end = materialBalance(b, us);
+  if (lastCapture != null && b[lastCapture].color === us && enPrise(b, lastCapture)) {
+    end -= VALUE[b[lastCapture].type];
+  }
+  return end - start >= 2;
+}
+
 // The forced tactic a move carries, if any: created by the move itself, or
 // by our follow-up in the engine's line after the opponent's best reply.
-// Only sound moves (rated Best or Good) qualify, since a tactic that loses
-// isn't one the opponent is forced to accept.
+// Only sound moves (rated Best or Good) qualify, and the engine's line has to
+// show the tactic paying off: winning material or mating. An immediate pin
+// counts as soon as it exists, since the pin itself is the result.
 export function forcedTactic(fen, rating) {
   if (!SOUND.has(rating.cls)) return null;
   const { board } = parseFen(fen);
-  const now = motifsOfMove(board, rating.uci).find(m => TACTIC_ICONS[m.id]);
+  const motifs = motifsOfMove(board, rating.uci).filter(m => TACTIC_ICONS[m.id]);
+  const pin = motifs.find(m => m.id === 'pin');
+  const others = motifs.filter(m => m.id !== 'pin');
+  const now = others.length && lineWins(board, rating) ? others[0] : pin;
   if (now) return { ...TACTIC_ICONS[now.id], id: now.id, when: 'now', motif: now };
+  if (!lineWins(board, rating)) return null;
   const [, reply, follow] = rating.pv;
   if (!reply || !follow) return null;
   try {

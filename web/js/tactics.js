@@ -7,6 +7,8 @@
 // Squares are indexes 0..63 (a1 = 0, h1 = 7, a8 = 56). A board is a
 // 64-entry array of { type, color } or null.
 
+import { Chess } from '../vendor/chess.js';
+
 export const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
 export const NAME = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
 
@@ -278,7 +280,39 @@ function isTrapped(board, i) {
     b[i] = null;
     if (!enPrise(b, d)) return false;
   }
+  // No safe square to run to; it's only trapped if no other reply saves it
+  // either: blocking the attack, defending it, or taking the attacker.
+  for (const reply of repliesFor(board, p.color)) {
+    const after = applyUci(board, reply);
+    const from = sqIndex(reply.slice(0, 2));
+    if (from === i) continue; // moving the piece itself was covered above
+    if (after[i] && !enPrise(after, i)) return false;
+  }
   return true;
+}
+
+// Legal moves for `color` on this board (castling and en passant ignored).
+function repliesFor(board, color) {
+  try {
+    return new Chess(boardToFen(board, color), { skipValidation: true }).moves({ verbose: true }).map(m => m.lan);
+  } catch {
+    return [];
+  }
+}
+
+export function boardToFen(board, turn) {
+  const rows = [];
+  for (let r = 7; r >= 0; r--) {
+    let row = '', empty = 0;
+    for (let f = 0; f < 8; f++) {
+      const p = board[r * 8 + f];
+      if (!p) { empty++; continue; }
+      if (empty) { row += empty; empty = 0; }
+      row += p.color === 'w' ? p.type.toUpperCase() : p.type;
+    }
+    rows.push(row + (empty || ''));
+  }
+  return `${rows.join('/')} ${turn} - - 0 1`;
 }
 
 function listText(items) {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Chess } from '../web/vendor/chess.js';
-import { parseFen, motifsOfMove } from '../web/js/tactics.js';
+import { parseFen, motifsOfMove, applyUci } from '../web/js/tactics.js';
 import { principlesOfMove } from '../web/js/principles.js';
 import { explainMove, forcedTactic } from '../web/js/explain.js';
 import { rateMoves } from '../web/js/analysis.js';
@@ -40,7 +40,7 @@ test('principles: trade while ahead vs behind', () => {
 
 test('forced tactic marker: immediate fork on a sound move only', () => {
   const fen = 'r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1';
-  const ratings = rateMoves([{ uci: 'b5c7', score: { cp: 500 } }, { uci: 'b5d4', score: { cp: 0 } }]);
+  const ratings = rateMoves([{ uci: 'b5c7', score: { cp: 500 }, pv: ['b5c7', 'e8d7', 'c7a8'] }, { uci: 'b5d4', score: { cp: 0 } }]);
   assert.equal(forcedTactic(fen, ratings.get('b5c7')).id, 'fork');
   const bad = rateMoves([{ uci: 'b5c7', score: { cp: -500 } }, { uci: 'b5d4', score: { cp: 200 } }]);
   assert.equal(forcedTactic(fen, bad.get('b5c7')), null);
@@ -49,7 +49,7 @@ test('forced tactic marker: immediate fork on a sound move only', () => {
 test('forced tactic marker: fork reached through the engine line', () => {
   // 1.Nb5 isn't a tactic itself, but after 1...h6 2.Nc7+ forks king and rook.
   const fen = 'r3k3/7p/8/8/3N4/8/8/4K3 w - - 0 1';
-  const ratings = rateMoves([{ uci: 'd4b5', score: { cp: 500 }, pv: ['d4b5', 'h7h6', 'b5c7'] }]);
+  const ratings = rateMoves([{ uci: 'd4b5', score: { cp: 500 }, pv: ['d4b5', 'h7h6', 'b5c7', 'e8d7', 'c7a8'] }]);
   const f = forcedTactic(fen, ratings.get('d4b5'));
   assert.equal(f.id, 'fork');
   assert.equal(f.when, 'next');
@@ -84,4 +84,22 @@ test('opening lookup and continuations', () => {
   assert.equal(identifyOpening(['a3']), null);
   const next = bookContinuations(['e4', 'e5', 'Nf3', 'Nc6']).map(c => c.san);
   for (const san of ['Bb5', 'Bc4', 'd4', 'Nc3', 'c3']) assert.ok(next.includes(san), san);
+});
+
+test('a fork the engine line does not cash in gets no icon', () => {
+  const fen = 'r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1';
+  // Engine line where the rook escapes: no material changes hands.
+  const r = rateMoves([{ uci: 'b5c7', score: { cp: 20 }, pv: ['b5c7', 'e8d7', 'c7a8', 'd7c8', 'a8b6', 'c8b7'] }]);
+  assert.notEqual(forcedTactic(fen, r.get('b5c7')), null); // knight wins the rook here: still a fork
+  const none = rateMoves([{ uci: 'b5c7', score: { cp: 20 }, pv: ['b5c7', 'e8d7'] }]);
+  assert.equal(forcedTactic(fen, none.get('b5c7')), null);
+});
+
+test('regression: rook on h8 after ...g6 Bb2 is not trapped (Black can block)', () => {
+  // 1.e4 c5 2.Nf3 d6 3.b3 Nc6; Stockfish line 4.c4 g6 5.Bb2.
+  const fen = 'r1bqkbnr/pp2pppp/2np4/2p5/4P3/1P3N2/P1PP1PPP/RNBQKB1R w KQkq - 1 4';
+  const b2 = applyUci(applyUci(parseFen(fen).board, 'c2c4'), 'g7g6');
+  assert.ok(!motifsOfMove(b2, 'c1b2').some(m => m.id === 'trap'));
+  const r = rateMoves([{ uci: 'c2c4', score: { cp: 40 }, pv: ['c2c4', 'g7g6', 'c1b2', 'f8g7'] }]);
+  assert.equal(forcedTactic(fen, r.get('c2c4')), null);
 });
