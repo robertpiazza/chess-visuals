@@ -100,7 +100,10 @@ function playMove(uci, { animate = true } = {}) {
   const fenBefore = game.fen();
   const rating = cache.get(fenBefore)?.ratings.get(uci) ?? null;
   const move = game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
-  if (animate) board.animateMove(moveAnimation(move));
+  if (animate) {
+    const { moves, captured } = moveAnimation(move);
+    board.animateMove({ moves, fadeOut: captured });
+  }
   plyRatings[game.history().length - 1] = rating;
   selected = null;
   hidePromotion();
@@ -647,9 +650,15 @@ function newGame(fen) {
 function undo() {
   if (!game.history().length) return;
   searchToken++;
-  game.undo();
+  const undone = [game.undo()];
   // Against the computer, step back to the human's turn.
-  if (mode !== 'both' && game.turn() !== mode && game.history().length) game.undo();
+  if (mode !== 'both' && game.turn() !== mode && game.history().length) undone.push(game.undo());
+  // Play the moves backwards, most recent first: pieces glide back and
+  // captured pieces fade back in.
+  board.animateMove(undone.map(move => {
+    const { moves, captured } = moveAnimation(move);
+    return { moves: moves.map(m => ({ from: m.to, to: m.from })), fadeIn: captured?.square };
+  }));
   plyRatings.length = game.history().length;
   selected = null;
   hidePromotion();

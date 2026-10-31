@@ -238,13 +238,16 @@ export class BoardView {
     }
   }
 
-  // Animate the move just played: each { from, to } piece glides to its new
-  // square and a captured piece fades out. Called before the render that
-  // shows the new position. The board redraws often (every engine update),
-  // so each redraw picks the animation up where it is instead of restarting.
-  animateMove({ moves, captured }) {
+  // Animate pieces into the position about to be rendered. `steps` play one
+  // after another; each is { moves: [{ from, to }], fadeOut?: { square,
+  // piece }, fadeIn?: square }: pieces glide from -> to, a captured piece
+  // fades out where it stood (playing a move), or a restored piece fades back
+  // in (undo). Called before the render that shows the new position. The
+  // board redraws often (every engine update), so each redraw picks the
+  // animation up where it is instead of restarting.
+  animateMove(steps) {
     const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    this.anim = reduce ? null : { moves, captured, start: performance.now(), duration: 200 };
+    this.anim = reduce ? null : { steps: [].concat(steps), start: performance.now(), duration: 200 };
   }
 
   drawPieces({ pieces }) {
@@ -264,29 +267,36 @@ export class BoardView {
 
     const anim = this.anim;
     const elapsed = anim ? performance.now() - anim.start : 0;
-    if (!anim || elapsed >= anim.duration || typeof Element.prototype.animate !== 'function') {
+    if (!anim || elapsed >= anim.duration * anim.steps.length || typeof Element.prototype.animate !== 'function') {
       this.anim = null;
       return;
     }
-    const timing = { duration: anim.duration, delay: -elapsed, easing: 'cubic-bezier(.25,.75,.35,1)', fill: 'backwards' };
-    if (anim.captured) {
-      // The captured piece fades out where it stood, under the mover.
-      const [x, y] = this.squareOrigin(anim.captured.square);
-      const ghost = el('image', { href: `pieces/${anim.captured.piece}.svg`, x, y, width: 100, height: 100, class: 'piece' });
-      this.layers.pieces.prepend(ghost);
-      ghost.animate([{ opacity: 1 }, { opacity: 0 }], { ...timing, fill: 'forwards' });
-    }
-    for (const { from, to } of anim.moves) {
-      const node = nodes.get(to);
-      if (!node) continue;
-      const [fx, fy] = this.squareOrigin(from);
-      const [tx, ty] = this.squareOrigin(to);
-      this.layers.pieces.append(node); // moving piece on top
-      node.animate([
-        { transform: `translate(${fx - tx}px, ${fy - ty}px)` },
-        { transform: 'translate(0px, 0px)' },
-      ], timing);
-    }
+    anim.steps.forEach((step, i) => {
+      const delay = i * anim.duration - elapsed;
+      const timing = { duration: anim.duration, delay, easing: 'cubic-bezier(.25,.75,.35,1)', fill: 'backwards' };
+      if (step.fadeOut) {
+        // The captured piece fades out where it stood, under the mover.
+        const [x, y] = this.squareOrigin(step.fadeOut.square);
+        const ghost = el('image', { href: `pieces/${step.fadeOut.piece}.svg`, x, y, width: 100, height: 100, class: 'piece' });
+        this.layers.pieces.prepend(ghost);
+        ghost.animate([{ opacity: 1 }, { opacity: 0 }], { ...timing, fill: 'both' });
+      }
+      if (step.fadeIn && nodes.has(step.fadeIn)) {
+        // A piece restored by undo fades back in on its square.
+        nodes.get(step.fadeIn).animate([{ opacity: 0 }, { opacity: 1 }], timing);
+      }
+      for (const { from, to } of step.moves) {
+        const node = nodes.get(to);
+        if (!node) continue;
+        const [fx, fy] = this.squareOrigin(from);
+        const [tx, ty] = this.squareOrigin(to);
+        this.layers.pieces.append(node); // moving piece on top
+        node.animate([
+          { transform: `translate(${fx - tx}px, ${fy - ty}px)` },
+          { transform: 'translate(0px, 0px)' },
+        ], timing);
+      }
+    });
   }
 
   // Arc fill for a target: the winning chance, except for a mate, where every
