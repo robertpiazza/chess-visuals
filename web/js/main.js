@@ -568,7 +568,7 @@ function renderExplain() {
       button = `<div class="explain-actions"><button data-line="${lineButtons.length - 1}">See why ${shown.comparison.san} was better</button></div>`;
     }
     return `<div class="review">${moveHeadHtml(shown, who)}${reasonsHtml(shown)}${shown.comparison ? `<p class="comparison">${shown.comparison.text}</p>` : ''}${button}</div>`;
-  }).join('');
+  }).reverse().join(''); // most recent move first
   for (const b of body.querySelectorAll('[data-line]')) {
     const { from, pv } = lineButtons[+b.dataset.line];
     b.addEventListener('click', () => showLine(from, pv));
