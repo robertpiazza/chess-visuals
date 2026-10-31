@@ -8,6 +8,7 @@ import { explainMove, forcedTactic, TACTIC_ICONS } from './explain.js';
 import { badgeHtml } from './icons.js';
 import { motifsOfMove, parseFen, sqName } from './tactics.js';
 import { OPENINGS, identifyOpening, bookContinuations } from './openings.js';
+import { MoveTree } from './tree.js';
 
 const $ = id => document.getElementById(id);
 
@@ -25,13 +26,13 @@ function saveSettings() {
 // ── Game state ──────────────────────────────────────────────────────────────
 const params = new URLSearchParams(location.search);
 let game = new Chess();
+let tree = new MoveTree(game.fen()); // every move played, with variations
 let mode = settings.mode;          // 'w', 'b' or 'both'
 let orientation = mode === 'b' ? 'b' : 'w';
 let selected = null;
 let reselecting = false;           // pointer went down on the already-selected piece
 let hoverSq = null;
 let pendingPromotion = null;
-let plyRatings = [];               // rating of each move played, by ply
 let engine = null;
 let analysis = null;               // { fen, ratings, summary, depth, done }
 const cache = new Map();           // fen → analysis
@@ -48,8 +49,12 @@ const board = new BoardView($('board-wrap'), {
 });
 
 // ── Turn logic ──────────────────────────────────────────────────────────────
+// The board is yours to move on when it's your turn, and also whenever you're
+// looking back at an earlier position or stepping through an engine line:
+// the computer only replies at the end of a line you're playing.
 function humanToMove() {
-  return !game.isGameOver() && (mode === 'both' || game.turn() === mode);
+  if (game.isGameOver()) return false;
+  return mode === 'both' || game.turn() === mode || !!tree.main(tree.cursor) || tree.cursor.engine;
 }
 
 function legalFrom(sq) {
@@ -96,18 +101,70 @@ function tryMove(from, to, opts) {
   playMove(options[0].lan, opts);
 }
 
+// Play a move from the current position. A move already in the tree is
+// followed; a new one extends the line, or starts a variation if this
+// position already has a continuation.
 function playMove(uci, { animate = true } = {}) {
-  const fenBefore = game.fen();
-  const rating = cache.get(fenBefore)?.ratings.get(uci) ?? null;
-  const move = game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
-  if (animate) {
-    const { moves, captured } = moveAnimation(move);
+  const move = new Chess(game.fen()).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+  goTo(tree.add(tree.cursor, move), { animate });
+}
+
+// Rebuild the game from the root along the cursor's path.
+function rebuildGame() {
+  game = new Chess(tree.root.fen);
+  for (const n of tree.path()) game.move(n.move.lan);
+}
+
+// Move to any node. One step forward or back animates; jumps don't.
+function goTo(node, { animate = true } = {}) {
+  if (!node) return;
+  const from = tree.cursor;
+  if (animate && node.parent === from) {
+    const { moves, captured } = moveAnimation(node.move);
     board.animateMove({ moves, fadeOut: captured });
+  } else if (animate && from.parent === node) {
+    const { moves, captured } = moveAnimation(from.move);
+    board.animateMove({ moves: moves.map(m => ({ from: m.to, to: m.from })), fadeIn: captured?.square });
   }
-  plyRatings[game.history().length - 1] = rating;
+  searchToken++;
+  tree.goTo(node);
+  rebuildGame();
   selected = null;
+  focusUci = null;
   hidePromotion();
   onPositionChanged();
+}
+
+const back = () => goTo(tree.cursor.parent);
+const forward = () => goTo(tree.next());
+
+// Insert an engine line (UCI moves) as a variation from `from` and step
+// into its first move, so → walks through the follow-up.
+function showLine(from, pv) {
+  const chess = new Chess(from.fen);
+  let parent = from;
+  let first = null;
+  for (const uci of pv.slice(0, 10)) {
+    let move;
+    try {
+      move = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+    } catch {
+      break;
+    }
+    const node = tree.add(parent, move, { engine: true });
+    parent.lastChild = node;
+    first ??= node;
+    parent = node;
+  }
+  if (!first) return;
+  if (from !== tree.cursor) goTo(from, { animate: false });
+  goTo(first);
+}
+
+// The rating a move had when played, from the analysis of the position
+// before it.
+function nodeRating(node) {
+  return node.move ? cache.get(node.move.before)?.ratings.get(node.move.lan) ?? null : null;
 }
 
 // What moves on the board for a chess.js move: the piece itself, the rook
@@ -457,8 +514,13 @@ function renderExplain() {
     $('explain-title').textContent = 'Why this move';
     body.innerHTML = moveHeadHtml(ex) + reasonsHtml(ex) +
       (ex.comparison ? `<p class="comparison">${ex.comparison.text}</p>` : '') +
-      (humanToMove() ? `<div class="explain-actions"><button class="primary" id="explain-play">Play ${ex.san}</button>${ex.comparison ? `<button id="explain-best">Show ${ex.comparison.san}</button>` : ''}</div>` : '');
+      (humanToMove() ? `<div class="explain-actions"><button class="primary" id="explain-play">Play ${ex.san}</button>` +
+        (focus.pv.length > 1 ? '<button id="explain-line">See the line</button>' : '') +
+        (ex.comparison ? `<button id="explain-best">Show ${ex.comparison.san}</button><button id="explain-best-line">See ${ex.comparison.san} line</button>` : '') +
+        '</div>' : '');
     $('explain-play')?.addEventListener('click', () => playMove(focus.uci));
+    $('explain-line')?.addEventListener('click', () => showLine(tree.cursor, focus.pv));
+    $('explain-best-line')?.addEventListener('click', () => showLine(tree.cursor, analysis.ratings.get(ex.comparison.uci).pv));
     $('explain-best')?.addEventListener('click', () => {
       const uci = ex.comparison.uci;
       selected = uci.slice(0, 2);
@@ -475,20 +537,34 @@ function renderExplain() {
   const hist = game.history({ verbose: true });
   const plies = hist.slice(-2);
   if (!plies.length) { card.hidden = true; return; }
+  const path = tree.path();
+  const lineButtons = [];
   $('explain-title').textContent = 'Last moves';
   body.innerHTML = plies.map((mv, k) => {
     const idx = hist.length - plies.length + k;
     const ex = explain(mv.before, mv.lan, hist.slice(0, idx));
     const yours = mode === 'both' || mv.color === mode;
-    const who = mode === 'both' ? (mv.color === 'w' ? 'White' : 'Black') : yours ? 'Your move' : 'Computer\'s move';
+    const who = path[idx].engine ? `Engine line (${mv.color === 'w' ? 'White' : 'Black'})`
+      : mode === 'both' ? (mv.color === 'w' ? 'White' : 'Black') : yours ? 'Your move' : 'Computer\'s move';
     const shown = { ...ex, rating: ex.rating ?? null };
     if (!yours) {
       // For the opponent's move, keep what it threatens and skip the comparison.
       shown.notes = [];
       shown.comparison = null;
     }
-    return `<div class="review">${moveHeadHtml(shown, who)}${reasonsHtml(shown)}${shown.comparison ? `<p class="comparison">${shown.comparison.text}</p>` : ''}</div>`;
+    // A move that wasn't best: offer the engine's line from before it.
+    let button = '';
+    const best = shown.comparison && shown.rating?.cls !== 'best' ? cache.get(mv.before)?.ratings.get(shown.comparison.uci) : null;
+    if (best) {
+      lineButtons.push({ from: path[idx].parent, pv: best.pv });
+      button = `<div class="explain-actions"><button data-line="${lineButtons.length - 1}">See why ${shown.comparison.san} was better</button></div>`;
+    }
+    return `<div class="review">${moveHeadHtml(shown, who)}${reasonsHtml(shown)}${shown.comparison ? `<p class="comparison">${shown.comparison.text}</p>` : ''}${button}</div>`;
   }).join('');
+  for (const b of body.querySelectorAll('[data-line]')) {
+    const { from, pv } = lineButtons[+b.dataset.line];
+    b.addEventListener('click', () => showLine(from, pv));
+  }
   card.hidden = false;
 }
 
@@ -512,7 +588,7 @@ function renderOpening() {
     const h = history.length;
     if (!followsPractice()) {
       const at = history.findIndex((san, i) => i < practice.sans.length && practice.sans[i] !== san);
-      html += `<p class="practice-note">You left the ${practice.name} line at move ${Math.floor(at / 2) + 1}: the book move was <b>${practice.sans[at]}</b>. Undo to try again.</p>`;
+      html += `<p class="practice-note">You left the ${practice.name} line at move ${Math.floor(at / 2) + 1}: the book move was <b>${practice.sans[at]}</b>. Step back (←) to try again.</p>`;
     } else if (h >= practice.sans.length) {
       html += `<p class="practice-note">${practice.name} line complete. Keep playing from here.</p>`;
     } else {
@@ -539,24 +615,45 @@ function renderOpening() {
   }
 }
 
+// The move tree as a book-style move list: the main line, with variations
+// in parentheses beneath the move they branch from. Click a move to go there.
 function renderHistory() {
-  const hist = game.history({ verbose: true });
   const list = $('history');
-  const items = [];
-  const ply = i => plyHtml(hist[i].san, plyRatings[i], hist[i].color);
-  for (let i = 0; i < hist.length; i += 2) {
-    const li = document.createElement('li');
-    li.innerHTML = `<span class="num">${i / 2 + 1}.</span>` + ply(i) + (hist[i + 1] ? ply(i + 1) : '<span></span>');
-    items.push(li);
-  }
-  list.replaceChildren(...items);
-  list.scrollTop = list.scrollHeight;
+  const html = lineHtml(tree.root, true);
+  list.innerHTML = html || '<span class="muted">No moves yet.</span>';
+  const current = list.querySelector('.ply.is-current');
+  if (current) list.scrollTop = current.offsetTop - list.clientHeight / 2;
 }
 
-function plyHtml(san, rating, mover) {
-  if (!rating) return `<span class="ply"><span class="dot cls-none"></span>${san}</span>`;
-  const cls = CLASSES.find(c => c.id === rating.cls);
-  return `<span class="ply" title="${cls.label} (${formatWhite(rating.score, mover)})"><span class="dot cls-${rating.cls}"></span>${san}<span class="sym cls-${rating.cls}">${cls.symbol}</span></span>`;
+function lineHtml(parent, numbered) {
+  let out = '';
+  let force = numbered;
+  for (let p = parent; p;) {
+    // A played position continues with its main-line move, and engine lines
+    // branch off it. Inside an engine line, the line simply continues.
+    const main = p.engine ? p.children[0] ?? null : tree.main(p);
+    if (main) {
+      out += plyHtml(main, force);
+      force = false;
+    }
+    for (const v of p.children.filter(c => c !== main)) {
+      out += `<span class="variation${v.engine ? ' is-engine' : ''}">(${plyHtml(v, true)}${lineHtml(v, false)})</span>`;
+      force = true;
+    }
+    p = main;
+  }
+  return out;
+}
+
+function plyHtml(node, forceNumber) {
+  const { san, color, before } = node.move;
+  const num = before.split(' ')[5];
+  const prefix = color === 'w' ? `<span class="num">${num}.</span>` : forceNumber ? `<span class="num">${num}…</span>` : '';
+  const rating = nodeRating(node);
+  const cls = rating ? CLASSES.find(c => c.id === rating.cls) : null;
+  const classes = ['ply', node === tree.cursor ? 'is-current' : '', node.engine ? 'is-engine' : ''].filter(Boolean).join(' ');
+  const title = cls ? ` title="${cls.label} (${formatWhite(rating.score, color)})"` : '';
+  return `${prefix}<span class="${classes}" data-id="${node.id}"${title}><span class="dot cls-${rating?.cls ?? 'none'}"></span>${san}${cls?.symbol ? `<span class="sym cls-${rating.cls}">${cls.symbol}</span>` : ''}</span> `;
 }
 
 function updateStatus() {
@@ -565,7 +662,8 @@ function updateStatus() {
   if (game.isGameOver()) { el.textContent = gameOverText(); return; }
   const depth = analysis?.fen === game.fen() ? analysis.depth : 0;
   if (humanToMove()) {
-    const who = mode === 'both' ? (game.turn() === 'w' ? 'White' : 'Black') + ' to move' : 'Your move';
+    const who = tree.cursor.engine ? 'Engine line (→ next move, ← back)'
+      : mode === 'both' ? (game.turn() === 'w' ? 'White' : 'Black') + ' to move' : 'Your move';
     el.textContent = analysis?.done && analysis.fen === game.fen()
       ? `${who} · rated at depth ${depth}`
       : `${who} · rating moves${depth ? ` (depth ${depth})` : ''}…`;
@@ -632,6 +730,7 @@ function newGame(fen) {
   searchToken++;
   try {
     game = new Chess(typeof fen === 'string' ? fen : undefined);
+    tree = new MoveTree(game.fen());
     customStart = typeof fen === 'string' && fen !== DEFAULT_FEN;
   } catch (err) {
     $('status').textContent = `Invalid FEN: ${err.message}`;
@@ -641,25 +740,6 @@ function newGame(fen) {
   settings.mode = mode;
   saveSettings();
   orientation = mode === 'b' ? 'b' : 'w';
-  plyRatings = [];
-  selected = null;
-  hidePromotion();
-  onPositionChanged();
-}
-
-function undo() {
-  if (!game.history().length) return;
-  searchToken++;
-  const undone = [game.undo()];
-  // Against the computer, step back to the human's turn.
-  if (mode !== 'both' && game.turn() !== mode && game.history().length) undone.push(game.undo());
-  // Play the moves backwards, most recent first: pieces glide back and
-  // captured pieces fade back in.
-  board.animateMove(undone.map(move => {
-    const { moves, captured } = moveAnimation(move);
-    return { moves: moves.map(m => ({ from: m.to, to: m.from })), fadeIn: captured?.square };
-  }));
-  plyRatings.length = game.history().length;
   selected = null;
   hidePromotion();
   onPositionChanged();
@@ -700,12 +780,21 @@ function initControls() {
     newGame();
   });
   $('new-game').onclick = () => newGame();
-  $('undo').onclick = undo;
+  $('back').onclick = back;
+  $('forward').onclick = forward;
+  $('history').addEventListener('click', e => {
+    const id = e.target.closest('[data-id]')?.dataset.id;
+    if (id != null) goTo(tree.byId.get(+id), { animate: false });
+  });
   $('flip').onclick = () => { orientation = orientation === 'w' ? 'b' : 'w'; render(); updateEvalBar(); };
   $('load-fen').onclick = () => newGame($('fen').value.trim());
   $('mode').addEventListener('change', () => newGame(game.history().length ? undefined : game.fen()));
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { hidePromotion(); select(null); }
+    if (e.key === 'Escape') { hidePromotion(); select(null); return; }
+    // Arrow keys step through the moves, unless typing in a field.
+    if (e.target.closest('input, select, textarea') || e.altKey || e.ctrlKey || e.metaKey) return;
+    const actions = { ArrowLeft: back, ArrowRight: forward, Home: () => goTo(tree.root, { animate: false }), End: () => goTo(tree.end(), { animate: false }) };
+    if (actions[e.key]) { e.preventDefault(); actions[e.key](); }
   });
 
   $('tactic-legend').innerHTML = ['fork', 'pin', 'skewer', 'discovered', 'trap', 'remove-defender', 'overload', 'sacrifice']

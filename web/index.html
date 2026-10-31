@@ -64,7 +64,8 @@
         </div>
         <div class="buttons">
           <button id="new-game" class="primary">New game</button>
-          <button id="undo">Undo</button>
+          <button id="back" title="Back one move (← key)">◀ Back</button>
+          <button id="forward" title="Forward one move (→ key)">Forward ▶</button>
           <button id="flip">Flip</button>
         </div>
       </div>
@@ -85,8 +86,9 @@
       </div>
 
       <div class="card">
-        <h2>Moves played</h2>
-        <ol class="history" id="history"></ol>
+        <h2>Moves</h2>
+        <div class="history" id="history"></div>
+        <p class="hint">← → step through moves, Home/End jump to the start or end. Play a different move after stepping back to start a variation; the line you played stays the main line.</p>
       </div>
 
       <div class="card">
