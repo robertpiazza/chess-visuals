@@ -184,8 +184,16 @@ function moveAnimation(move) {
   return { moves, captured };
 }
 
+// Show each caret only when it can be used: back once a move has been
+// played, forward only when there's a move ahead (after stepping back).
+function renderNav() {
+  $('back').hidden = !tree.cursor.parent;
+  $('forward').hidden = !tree.next();
+}
+
 function onPositionChanged() {
   render();
+  renderNav();
   renderHistory();
   renderPieceCard();
   renderOpening();

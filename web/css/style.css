@@ -314,3 +314,5 @@ summary { cursor: pointer; font-size: 14px; color: var(--muted); }
 .legend-icon.is-unsound { background: #dc2626; }
 .tactic-badge, .legend-icon { --badge-bg: #7c3aed; }
 .tactic-badge.is-unsound, .legend-icon.is-unsound { --badge-bg: #dc2626; }
+.nav-caret { font-size: 22px; line-height: 1; padding: 3px 14px 6px; font-weight: 600; }
+.nav-caret[hidden] { display: none; }
