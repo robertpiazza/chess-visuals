@@ -237,18 +237,54 @@ export class BoardView {
     }
   }
 
+  // Animate the move just played: each { from, to } piece glides to its new
+  // square and a captured piece fades out. Called before the render that
+  // shows the new position. The board redraws often (every engine update),
+  // so each redraw picks the animation up where it is instead of restarting.
+  animateMove({ moves, captured }) {
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.anim = reduce ? null : { moves, captured, start: performance.now(), duration: 200 };
+  }
+
   drawPieces({ pieces }) {
+    const nodes = new Map();
     for (const row of pieces) {
       for (const p of row) {
         if (!p) continue;
         const [x, y] = this.squareOrigin(p.square);
-        el('image', {
+        nodes.set(p.square, el('image', {
           href: `pieces/${p.color}${p.type.toUpperCase()}.svg`,
           x, y, width: 100, height: 100,
           class: 'piece',
           'data-sq': p.square,
-        }, this.layers.pieces);
+        }, this.layers.pieces));
       }
+    }
+
+    const anim = this.anim;
+    const elapsed = anim ? performance.now() - anim.start : 0;
+    if (!anim || elapsed >= anim.duration || typeof Element.prototype.animate !== 'function') {
+      this.anim = null;
+      return;
+    }
+    const timing = { duration: anim.duration, delay: -elapsed, easing: 'cubic-bezier(.25,.75,.35,1)', fill: 'backwards' };
+    if (anim.captured) {
+      // The captured piece fades out where it stood, under the mover.
+      const [x, y] = this.squareOrigin(anim.captured.square);
+      const ghost = el('image', { href: `pieces/${anim.captured.piece}.svg`, x, y, width: 100, height: 100, class: 'piece' });
+      this.layers.pieces.prepend(ghost);
+      ghost.animate([{ opacity: 1 }, { opacity: 0 }], { ...timing, fill: 'forwards' });
+    }
+    for (const { from, to } of anim.moves) {
+      const node = nodes.get(to);
+      if (!node) continue;
+      const [fx, fy] = this.squareOrigin(from);
+      const [tx, ty] = this.squareOrigin(to);
+      this.layers.pieces.append(node); // moving piece on top
+      node.animate([
+        { transform: `translate(${fx - tx}px, ${fy - ty}px)` },
+        { transform: 'translate(0px, 0px)' },
+      ], timing);
     }
   }
 

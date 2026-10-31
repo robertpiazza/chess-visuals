@@ -68,7 +68,7 @@ The computer opponent uses the same ratings. "Computer strength" 20 always plays
 - **Game**: play White or Black against the computer, or "Both sides" to rate moves for whoever is to move.
 - **Undo** steps back to your previous turn. **Flip** turns the board.
 - **Load position (FEN)** starts from any position.
-- Click or drag pieces to move. In the selected piece's move list, click a row to explain it and double-click to play it. `Esc` clears the selection.
+- Click or drag pieces to move. Clicked moves, the computer's moves and moves played from the side panel glide to their square in about 0.2 s (captured pieces fade, the rook slides when castling); dragged moves and systems with reduced motion turned on skip the animation. In the selected piece's move list, click a row to explain it and double-click to play it. `Esc` clears the selection.
 
 ## Running locally
 

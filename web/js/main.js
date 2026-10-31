@@ -70,7 +70,8 @@ function onSquareDown(sq) {
 function onSquareUp(sq, { click }) {
   if (!selected) return;
   if (sq !== selected && legalFrom(selected).some(m => m.to === sq)) {
-    tryMove(selected, sq);
+    // A dragged piece is already on its square: no glide.
+    tryMove(selected, sq, { animate: click });
     return;
   }
   if (!click) return;
@@ -86,23 +87,41 @@ function select(sq) {
   renderPieceCard();
 }
 
-function tryMove(from, to) {
+function tryMove(from, to, opts) {
   const options = legalFrom(from).filter(m => m.to === to);
   if (options.length > 1) {
     showPromotion(from, to, options);
     return;
   }
-  playMove(options[0].lan);
+  playMove(options[0].lan, opts);
 }
 
-function playMove(uci) {
+function playMove(uci, { animate = true } = {}) {
   const fenBefore = game.fen();
   const rating = cache.get(fenBefore)?.ratings.get(uci) ?? null;
-  game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+  const move = game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+  if (animate) board.animateMove(moveAnimation(move));
   plyRatings[game.history().length - 1] = rating;
   selected = null;
   hidePromotion();
   onPositionChanged();
+}
+
+// What moves on the board for a chess.js move: the piece itself, the rook
+// when castling, and the captured piece (beside the pawn for en passant).
+function moveAnimation(move) {
+  const moves = [{ from: move.from, to: move.to }];
+  if (move.flags.includes('k') || move.flags.includes('q')) {
+    const rank = move.to[1];
+    const kingside = move.flags.includes('k');
+    moves.push({ from: (kingside ? 'h' : 'a') + rank, to: (kingside ? 'f' : 'd') + rank });
+  }
+  let captured = null;
+  if (move.captured) {
+    const square = move.flags.includes('e') ? move.to[0] + move.from[1] : move.to;
+    captured = { square, piece: (move.color === 'w' ? 'b' : 'w') + move.captured.toUpperCase() };
+  }
+  return { moves, captured };
 }
 
 function onPositionChanged() {
