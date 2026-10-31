@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chess Visuals</title>
+  <meta name="description" content="Play chess with every piece showing how good its moves are, rated by an engine.">
+  <link rel="icon" href="pieces/wN.svg" type="image/svg+xml">
+  <link rel="canonical" href="https://robertpiazza.com/chess-visuals/">
+
+  <!-- Link previews (Open Graph for most apps, Twitter card for X). -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Chess Visuals">
+  <meta property="og:title" content="Chess Visuals: see how good every move is">
+  <meta property="og:description" content="A chess trainer where every piece shows how good its moves are. Forks, pins, skewers and sacrifices are flagged, each move is explained, and an opening library helps you practice.">
+  <meta property="og:url" content="https://robertpiazza.com/chess-visuals/">
+  <meta property="og:image" content="https://robertpiazza.com/chess-visuals/og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="A chess board with coloured rings around each piece rating its moves, next to the title Chess Visuals.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Chess Visuals: see how good every move is">
+  <meta name="twitter:description" content="A chess trainer where every piece shows how good its moves are, with tactics flagged and every move explained.">
+  <meta name="twitter:image" content="https://robertpiazza.com/chess-visuals/og-image.png">
+  <meta name="twitter:image:alt" content="A chess board with coloured rings around each piece rating its moves, next to the title Chess Visuals.">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Chess Visuals</h1>
+    <p class="tagline">Every piece shows how good its moves are. Select one to see each move rated.</p>
+  </header>
+
+  <main class="layout">
+    <section class="board-area">
+      <div class="evalbar" id="evalbar" title="Engine evaluation (White's side)">
+        <div class="evalbar-fill" id="evalbar-fill"></div>
+        <span class="evalbar-label" id="evalbar-label">0.0</span>
+      </div>
+      <div class="board-wrap" id="board-wrap">
+        <div class="promo" id="promo" hidden></div>
+        <div class="banner" id="banner" hidden></div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="status" id="status">Loading engine…</div>
+
+      <div class="card">
+        <div class="row">
+          <label for="mode">Game</label>
+          <select id="mode">
+            <option value="w">Play White vs computer</option>
+            <option value="b">Play Black vs computer</option>
+            <option value="both">Both sides (analysis)</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="practice">Practice an opening</label>
+          <select id="practice">
+            <option value="">Free play</option>
+          </select>
+        </div>
+        <div class="buttons">
+          <button id="new-game" class="primary">New game</button>
+          <button id="undo">Undo</button>
+          <button id="flip">Flip</button>
+        </div>
+      </div>
+
+      <div class="card" id="explain-card" hidden>
+        <h2 id="explain-title">Why this move</h2>
+        <div id="explain-body"></div>
+      </div>
+
+      <div class="card" id="piece-card" hidden>
+        <h2 id="piece-title">Moves</h2>
+        <ol class="move-ratings" id="piece-moves"></ol>
+      </div>
+
+      <div class="card" id="opening-card">
+        <h2>Opening</h2>
+        <div id="opening-body"></div>
+      </div>
+
+      <div class="card">
+        <h2>Moves played</h2>
+        <ol class="history" id="history"></ol>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <label for="strength">Computer strength <output id="strength-out"></output></label>
+          <input type="range" id="strength" min="0" max="20" step="1">
+        </div>
+        <div class="row">
+          <label for="depth">Rating depth <output id="depth-out"></output></label>
+          <input type="range" id="depth" min="6" max="20" step="1">
+        </div>
+        <label class="check"><input type="checkbox" id="show-rings"> Rings on my pieces</label>
+        <label class="check"><input type="checkbox" id="show-dests"> Ratings on moves of the selected piece</label>
+        <label class="check"><input type="checkbox" id="show-explain"> Tactic icons, arrows and explanations</label>
+        <label class="check"><input type="checkbox" id="show-book"> Book moves as arrows</label>
+        <div class="engine-name" id="engine-name"></div>
+      </div>
+
+      <div class="card legend">
+        <div class="legend-items" id="legend"></div>
+        <p class="hint">Ring around a piece: one slice per legal move, best to worst going clockwise from the top. ★ marks every piece that has a Best-rated move, and every Best-rated target of the selected piece. On a selected piece's targets, the arc fills to your winning chance after that move (for a mate, to how fast it mates: the quickest mate fills the ring); the number is the engine score in the standard convention: + is good for White, − for Black (so as Black, lower is better for you).</p>
+        <p class="hint"><span id="tactic-legend"></span> Badges mark a fork, pin, skewer, discovered attack, trapped piece, removed defender, overloaded piece or sound sacrifice the move forces, either right away or after the opponent's best reply in the engine's line. Purple means the tactic works: the move is rated Best or Good and the engine's line wins material. Red means the move sets it up but it doesn't pay off. Purple arrows show your tactic, red arrows what the opponent gets, blue arrows book moves.</p>
+      </div>
+
+      <details class="card">
+        <summary>Load position (FEN)</summary>
+        <div class="fen-row">
+          <input id="fen" type="text" spellcheck="false" aria-label="FEN">
+          <button id="load-fen">Load</button>
+        </div>
+      </details>
+    </aside>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
