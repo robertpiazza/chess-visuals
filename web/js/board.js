@@ -229,8 +229,9 @@ export class BoardView {
           class: `seg cls-${m.cls}`,
         }, g);
       });
-      // Star every piece that has at least one move rated Best.
-      if (summary.best.cls === 'best') {
+      // Star every piece that has at least one move rated Best. Once a piece
+      // is selected its star moves to the best target square(s) instead.
+      if (summary.best.cls === 'best' && sq !== selected) {
         el('path', { d: STAR_PATH, transform: `translate(${x + 88} ${y + 12})`, class: 'best-star' }, g);
       }
       const icon = pieceIcons?.get(sq);
