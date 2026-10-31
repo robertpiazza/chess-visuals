@@ -11,7 +11,7 @@ A browser chess trainer for standard chess. On your turn, every one of your piec
 - A faint grey ring means the piece has no legal moves.
 
 **Selected piece**
-- Each target square shows a disc tinted by the move's quality and an arc filled to your winning chance after that move.
+- Each target square shows a disc tinted by the move's quality and an arc filled to your winning chance after that move. For a mating move every line wins outright, so the arc shows speed instead: the fastest mate in the position fills the ring and mate in n fills fastest/n of it.
 - Targets rated Best also get a ★, as do their rows in the side panel.
 - The label under it is the engine score in the standard convention, from White's side: +1.0 means White is about a pawn better, −1.0 Black, `#3` White mates in 3, `#-3` Black mates in 3. The win% arc and the percentages in the move list stay from the mover's side.
 - The side panel lists the piece's moves with SAN, class, score and win %. Hover a row to highlight the square; click a row to play it.

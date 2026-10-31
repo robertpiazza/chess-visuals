@@ -254,7 +254,7 @@ summary { cursor: pointer; font-size: 14px; color: var(--muted); }
 .dest .tactic-badge { pointer-events: none; }
 
 /* Arrows */
-.arrow { pointer-events: none; opacity: 0.85; }
+.arrow { pointer-events: none; opacity: 0.72; }
 .arrow line { stroke-width: 11; stroke-linecap: round; }
 .arrow.is-dashed line { stroke-dasharray: 14 10; stroke-linecap: butt; }
 .arrow-good line { stroke: #7c3aed; } .arrow-good path { fill: #7c3aed; }

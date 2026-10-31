@@ -358,6 +358,8 @@ function render() {
 
   board.render({
     mover: game.turn(),
+    // Fastest mate in the position, so slower mates show a part-filled ring.
+    fastestMate: ready ? Math.min(Infinity, ...[...analysis.ratings.values()].filter(r => r.score.mate > 0).map(r => r.score.mate)) : null,
     pieces: game.board(),
     orientation,
     lastMove: lastMove(),

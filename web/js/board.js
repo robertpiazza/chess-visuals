@@ -44,7 +44,8 @@ export class BoardView {
     this.svg = el('svg', { viewBox: '0 0 800 800', class: 'board', role: 'img', 'aria-label': 'Chess board' });
     container.appendChild(this.svg);
     this.layers = {};
-    for (const name of ['squares', 'marks', 'rings', 'pieces', 'dests', 'arrows', 'labels', 'drag']) {
+    // 'overlay' holds score pills, stars and badges so arrows never cover them.
+    for (const name of ['squares', 'marks', 'rings', 'pieces', 'dests', 'arrows', 'overlay', 'labels', 'drag']) {
       this.layers[name] = el('g', { class: `layer-${name}` }, this.svg);
     }
     this.orientation = 'w';
@@ -288,7 +289,15 @@ export class BoardView {
     }
   }
 
-  drawDestinations({ destinations, destIcons, plainTargets, pieces, highlight, mover }) {
+  // Arc fill for a target: the winning chance, except for a mate, where every
+  // line wins outright; there it shows speed, the fastest mate in the
+  // position filling the ring and mate in n filling fastest/n of it.
+  arcFraction(m, fastestMate) {
+    if (m.score.mate > 0 && fastestMate) return fastestMate / m.score.mate;
+    return m.win / 100;
+  }
+
+  drawDestinations({ destinations, destIcons, plainTargets, pieces, highlight, mover, fastestMate }) {
     const occupied = new Set(pieces.flat().filter(Boolean).map(p => p.square));
     if (plainTargets) {
       for (const sq of plainTargets) {
@@ -301,27 +310,30 @@ export class BoardView {
     for (const [sq, m] of destinations) {
       const [x, y] = this.squareOrigin(sq);
       const cx = x + 50, cy = y + 50;
-      const g = el('g', { class: `dest cls-${m.cls}` + (sq === highlight ? ' is-hover' : '') }, this.layers.dests);
+      const cls = `dest cls-${m.cls}` + (sq === highlight ? ' is-hover' : '');
+      const g = el('g', { class: cls }, this.layers.dests);
+      const top = el('g', { class: cls }, this.layers.overlay);
+      const fill = Math.max(0.05, this.arcFraction(m, fastestMate)) * Math.PI * 2;
       if (occupied.has(sq)) {
-        // Capture: ring around the target piece, filled to win%.
+        // Capture: ring around the target piece.
         el('path', { d: arcPath(cx, cy, RING_IN, RING_OUT, 0, Math.PI * 2), class: 'dest-track' }, g);
-        el('path', { d: arcPath(cx, cy, RING_IN, RING_OUT, 0, Math.max(0.05, m.win / 100 * Math.PI * 2)), class: 'dest-arc' }, g);
+        el('path', { d: arcPath(cx, cy, RING_IN, RING_OUT, 0, fill), class: 'dest-arc' }, g);
       } else {
         el('circle', { cx, cy, r: DEST_IN - 1, class: 'dest-disc' }, g);
         el('path', { d: arcPath(cx, cy, DEST_IN, DEST_OUT, 0, Math.PI * 2), class: 'dest-track' }, g);
-        el('path', { d: arcPath(cx, cy, DEST_IN, DEST_OUT, 0, Math.max(0.05, m.win / 100 * Math.PI * 2)), class: 'dest-arc' }, g);
+        el('path', { d: arcPath(cx, cy, DEST_IN, DEST_OUT, 0, fill), class: 'dest-arc' }, g);
       }
       if (m.cls === 'best') {
-        el('path', { d: STAR_PATH, transform: `translate(${x + 86} ${y + 14}) scale(1.2)`, class: 'best-star' }, g);
+        el('path', { d: STAR_PATH, transform: `translate(${x + 86} ${y + 14}) scale(1.2)`, class: 'best-star' }, top);
       }
       const icon = destIcons?.get(sq);
-      if (icon) this.drawIcon(g, x, y, icon, 1.2);
+      if (icon) this.drawIcon(top, x, y, icon, 1.2);
       const label = formatWhite(m.score, mover);
       const w = 10 + label.length * 10;
       // Shift the score pill right if needed to clear a bottom-left badge.
       const px = icon ? Math.max(cx - w / 2, x + 30) : cx - w / 2;
-      el('rect', { x: px, y: y + 76, width: w, height: 22, rx: 11, class: 'dest-pill' }, g);
-      el('text', { x: px + w / 2, y: y + 92, 'text-anchor': 'middle', class: 'dest-label' }, g).textContent = label;
+      el('rect', { x: px, y: y + 76, width: w, height: 22, rx: 11, class: 'dest-pill' }, top);
+      el('text', { x: px + w / 2, y: y + 92, 'text-anchor': 'middle', class: 'dest-label' }, top).textContent = label;
     }
   }
 }
