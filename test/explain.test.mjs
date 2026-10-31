@@ -236,3 +236,20 @@ test('a mating move says checkmate, not just check', () => {
   const chk = '6k1/5p1p/8/1R6/8/8/5PPP/6K1 w - - 0 1';
   assert.ok(motifsOfMove(parseFen(chk).board, 'b5b8').some(m => m.id === 'check'));
 });
+
+test('an opponent reply that creates a tactic is drawn as its own solid arrow', () => {
+  // Bg2-e4?? lets ...Nf6 fork the bishop on e4 and the queen on h5.
+  const fen = 'rnbqkbn1/1p2pp1r/7p/p1PPN1pQ/8/6P1/PPP2PBP/RNB1K2R w KQq - 0 10';
+  const r = rateMoves([
+    { uci: 'g2e4', score: { cp: -300 }, pv: ['g2e4', 'g8f6'] },
+    { uci: 'h5f7', score: { cp: 200 }, pv: ['h5f7'] },
+  ]);
+  const ex = explainMove(fen, 'g2e4', r);
+  assert.ok(ex.notes.some(n => /^Allows Nf6: fork/.test(n.text)));
+  const sq = s => (s.charCodeAt(1) - 49) * 8 + (s.charCodeAt(0) - 97);
+  const reply = ex.arrows.find(a => a.from === sq('g8') && a.to === sq('f6'));
+  assert.ok(reply, 'g8-f6 arrow');
+  assert.equal(reply.tone, 'bad');
+  assert.ok(!reply.dashed, 'the reply move is solid');
+  assert.ok(ex.arrows.some(a => a.from === sq('f6') && a.dashed), 'fork lines from f6 stay dashed');
+});

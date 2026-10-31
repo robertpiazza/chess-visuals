@@ -236,13 +236,16 @@ export function explainMove(fen, uci, ratings, history = []) {
     const replyTo = sqIndex(reply.slice(2, 4));
     tactics = tactics.filter(m => !(m.id === 'hangs' && m.arrows.some(a => a[1] === replyTo)));
     if (theirs.length) {
+      // The reply itself as a solid arrow, so it's clear which piece moves;
+      // what it then attacks follows as dashed arrows.
+      arrows.push({ from: sqIndex(reply.slice(0, 2)), to: sqIndex(reply.slice(2, 4)), tone: 'bad' });
       for (const m of theirs.slice(0, 2)) {
         notes.push({ tone: 'bad', text: `Allows ${replySan}: ${lowerFirst(m.text)}` });
         for (const a of m.arrows) arrows.push({ from: a[0], to: a[1], tone: 'bad', dashed: true });
       }
     } else {
       notes.push({ tone: 'bad', text: `Expected reply: ${replySan}` });
-      arrows.push({ from: sqIndex(reply.slice(0, 2)), to: sqIndex(reply.slice(2, 4)), tone: 'bad', dashed: true });
+      arrows.push({ from: sqIndex(reply.slice(0, 2)), to: sqIndex(reply.slice(2, 4)), tone: 'bad' });
     }
   }
 
