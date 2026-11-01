@@ -58,6 +58,10 @@ export class BoardView {
     this.svg.addEventListener('pointerup', e => this.pointerUp(e));
     this.svg.addEventListener('pointerleave', () => this.setHover(null));
     this.svg.addEventListener('pointercancel', () => this.endDrag());
+    // Marker sizes depend on the board's on-screen size, so redraw on resize.
+    if (typeof ResizeObserver === 'function') {
+      new ResizeObserver(() => { if (this.lastState) this.render(this.lastState); }).observe(this.svg);
+    }
   }
 
   squareOrigin(sq) {
@@ -138,7 +142,14 @@ export class BoardView {
   // pieceIcons / destIcons: Map square → { letter, glyph, label } for forced tactics.
   // arrows: [{ from, to, tone: 'good' | 'bad' | 'neutral' | 'book' | 'move', dashed }]
   render(state) {
+    this.lastState = state;
     this.orientation = state.orientation;
+    // Stars and tactic badges keep a minimum size on screen: about 18 px
+    // for a badge and 16 px for a star. On a phone, where a square is only
+    // ~40 px, that means drawing them up to ~2x larger than on a desktop.
+    const squarePx = this.svg.getBoundingClientRect().width / 8 || 100;
+    this.badgeScale = Math.min(2.4, Math.max(1, 1800 / squarePx / 22));
+    this.starScale = Math.min(2.4, Math.max(1, 1600 / squarePx / 18));
     for (const layer of Object.values(this.layers)) {
       if (layer !== this.layers.drag) layer.replaceChildren();
     }
@@ -152,9 +163,27 @@ export class BoardView {
   // Small badge in a square's bottom-left corner marking a forced tactic
   // (clear of the rank numbers top-left and file letters bottom-right): a
   // pictogram (fork, pin, skewer) or a letter.
+  // Centre for a marker of radius r near a square's corner: mostly over the
+  // corner, so a larger marker overhangs the edge rather than covering the
+  // piece, but kept on the board. corner is 'bl' (bottom-left) or 'tr'.
+  cornerPoint(x, y, corner, r) {
+    const inset = r * 0.3;
+    const cx = corner === 'bl' ? x + inset : x + 100 - inset;
+    const cy = corner === 'bl' ? y + 100 - inset : y + inset;
+    const clamp = v => Math.min(800 - r, Math.max(r, v));
+    return [clamp(cx), clamp(cy)];
+  }
+
+  drawStar(parent, x, y, scale) {
+    const [cx, cy] = this.cornerPoint(x, y, 'tr', 9 * scale);
+    el('path', { d: STAR_PATH, transform: `translate(${cx} ${cy}) scale(${scale})`, class: 'best-star' }, parent);
+  }
+
+  // Badge at a square's bottom-left corner. Returns its right edge.
   drawIcon(parent, x, y, icon, scale = 1) {
     const cls = 'tactic-badge' + (icon.sound === false ? ' is-unsound' : '');
-    const g = el('g', { class: cls, transform: `translate(${x + 14} ${y + 86}) scale(${scale})` }, parent);
+    const [cx, cy] = this.cornerPoint(x, y, 'bl', 12 * scale);
+    const g = el('g', { class: cls, transform: `translate(${cx} ${cy}) scale(${scale})` }, parent);
     el('title', {}, g).textContent = iconTitle(icon);
     el('circle', { r: 11 }, g);
     if (hasGlyph(icon)) {
@@ -163,6 +192,7 @@ export class BoardView {
     } else {
       el('text', { y: 5, 'text-anchor': 'middle' }, g).textContent = icon.letter;
     }
+    return cx + 12 * scale;
   }
 
   drawArrows({ arrows }) {
@@ -232,10 +262,10 @@ export class BoardView {
       // Star every piece that has at least one move rated Best. Once a piece
       // is selected its star moves to the best target square(s) instead.
       if (summary.best.cls === 'best' && sq !== selected) {
-        el('path', { d: STAR_PATH, transform: `translate(${x + 88} ${y + 12})`, class: 'best-star' }, g);
+        this.drawStar(this.layers.overlay, x, y, this.starScale);
       }
       const icon = pieceIcons?.get(sq);
-      if (icon) this.drawIcon(g, x, y, icon);
+      if (icon) this.drawIcon(this.layers.overlay, x, y, icon, this.badgeScale);
     }
   }
 
@@ -335,14 +365,14 @@ export class BoardView {
         el('path', { d: arcPath(cx, cy, DEST_IN, DEST_OUT, 0, fill), class: 'dest-arc' }, g);
       }
       if (m.cls === 'best') {
-        el('path', { d: STAR_PATH, transform: `translate(${x + 86} ${y + 14}) scale(1.2)`, class: 'best-star' }, top);
+        this.drawStar(top, x, y, Math.max(1.2, this.starScale));
       }
       const icon = destIcons?.get(sq);
-      if (icon) this.drawIcon(top, x, y, icon, 1.2);
+      const badgeRight = icon ? this.drawIcon(top, x, y, icon, Math.max(1.2, this.badgeScale)) : 0;
       const label = formatWhite(m.score, mover);
       const w = 10 + label.length * 10;
       // Shift the score pill right if needed to clear a bottom-left badge.
-      const px = icon ? Math.max(cx - w / 2, x + 30) : cx - w / 2;
+      const px = icon ? Math.min(x + 100 - w, Math.max(cx - w / 2, badgeRight + 2)) : cx - w / 2;
       el('rect', { x: px, y: y + 76, width: w, height: 22, rx: 11, class: 'dest-pill' }, top);
       el('text', { x: px + w / 2, y: y + 92, 'text-anchor': 'middle', class: 'dest-label' }, top).textContent = label;
     }

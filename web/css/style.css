@@ -113,7 +113,10 @@ body {
 .seg.cls-blunder { fill: var(--cls-blunder); }
 .piece-ring { opacity: 0.92; }
 .piece-ring.is-selected { opacity: 1; }
-.best-star { fill: #facc15; stroke: #7c5e00; stroke-width: 1.2; }
+.best-star { fill: #facc15; stroke: #4a3700; stroke-width: 1.6; stroke-linejoin: round; }
+/* A dark halo so stars and badges stand out from squares and rings. */
+.best-star, .tactic-badge { filter: drop-shadow(0 0 1.2px rgba(0, 0, 0, 0.7)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35)); }
+.layer-overlay { pointer-events: none; }
 
 /* Selected-piece destinations */
 .dest { pointer-events: none; }
