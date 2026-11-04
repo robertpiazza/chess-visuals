@@ -271,3 +271,39 @@ test('a pinned piece can still capture along the pin line', async () => {
   const b2 = parseFen('4r1k1/8/8/n7/8/8/4R3/4K3 w - - 0 1').board;
   assert.deepEqual(capturers(b2, sqIndex('a5'), 'w'), []);
 });
+
+test('the king cannot take a defended piece, and a capture must answer check', async () => {
+  const { capturers, sqIndex } = await import('../web/js/tactics.js');
+  // Black knight on d2 defended by the bishop on b4: Ke1 can't take it.
+  const b = parseFen('4k3/8/8/8/1b6/8/3n4/4K3 w - - 0 1').board;
+  assert.deepEqual(capturers(b, sqIndex('d2'), 'w'), []);
+  // White is in check from the rook on e8; Nc3xa4 doesn't answer it.
+  const b2 = parseFen('4r1k1/8/8/8/n7/2N5/8/4K3 w - - 0 1').board;
+  assert.deepEqual(capturers(b2, sqIndex('a4'), 'w'), []);
+});
+
+test('capturers matches chess.js legal captures in random games', async () => {
+  const { capturers } = await import('../web/js/tactics.js');
+  let seed = 7;
+  const rand = n => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+  const name = i => 'abcdefgh'[i & 7] + ((i >> 3) + 1);
+  let checked = 0;
+  for (let g = 0; g < 40; g++) {
+    const chess = new Chess();
+    for (let ply = 0; ply < 80 && !chess.isGameOver(); ply++) {
+      const board = parseFen(chess.fen()).board;
+      const us = chess.turn();
+      const legal = chess.moves({ verbose: true }).filter(m => m.captured && !m.flags.includes('e'));
+      for (let i = 0; i < 64; i++) {
+        if (!board[i] || board[i].color === us) continue;
+        const want = [...new Set(legal.filter(m => m.to === name(i)).map(m => m.from))].sort();
+        const got = capturers(board, i, us).map(name).sort();
+        assert.deepEqual(got, want, `${chess.fen()} captures on ${name(i)}`);
+        checked++;
+      }
+      const moves = chess.moves();
+      chess.move(moves[rand(moves.length)]);
+    }
+  }
+  assert.ok(checked > 1000);
+});

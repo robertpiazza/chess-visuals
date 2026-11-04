@@ -87,25 +87,21 @@ export function attacksFrom(board, i) {
   return out;
 }
 
-// Pieces of `color` that can actually capture on `i`: attackers, minus any
-// pinned to their own king that would expose it by capturing. (A pinned piece
-// can still capture along the pin line, e.g. taking the pinning piece.)
+// Pieces of `color` that can legally capture on `i`: attackers whose capture
+// doesn't leave their own king attacked. This covers every reason a capture
+// can be illegal: a pin, a check the capture doesn't answer, or the king
+// taking a defended piece.
 export function capturers(board, i, color) {
-  return attackersOf(board, i, color).filter(a => canCapture(board, a, i));
+  return attackersOf(board, i, color).filter(a => isLegalCapture(board, a, i));
 }
 
-function canCapture(board, from, to) {
+function isLegalCapture(board, from, to) {
   const p = board[from];
-  if (p.type === 'k') return true;
-  const king = kingSquare(board, p.color);
-  if (king < 0) return true;
-  // Only a piece on a line with its own king can be pinned.
-  const df = (from & 7) - (king & 7), dr = (from >> 3) - (king >> 3);
-  if (df !== 0 && dr !== 0 && Math.abs(df) !== Math.abs(dr)) return true;
   const b = board.slice();
   b[to] = p;
   b[from] = null;
-  return attackersOf(b, king, other(p.color)).length === 0;
+  const king = kingSquare(b, p.color);
+  return king < 0 || attackersOf(b, king, other(p.color)).length === 0;
 }
 
 export function attackersOf(board, i, color) {
