@@ -87,6 +87,27 @@ export function attacksFrom(board, i) {
   return out;
 }
 
+// Pieces of `color` that can actually capture on `i`: attackers, minus any
+// pinned to their own king that would expose it by capturing. (A pinned piece
+// can still capture along the pin line, e.g. taking the pinning piece.)
+export function capturers(board, i, color) {
+  return attackersOf(board, i, color).filter(a => canCapture(board, a, i));
+}
+
+function canCapture(board, from, to) {
+  const p = board[from];
+  if (p.type === 'k') return true;
+  const king = kingSquare(board, p.color);
+  if (king < 0) return true;
+  // Only a piece on a line with its own king can be pinned.
+  const df = (from & 7) - (king & 7), dr = (from >> 3) - (king >> 3);
+  if (df !== 0 && dr !== 0 && Math.abs(df) !== Math.abs(dr)) return true;
+  const b = board.slice();
+  b[to] = p;
+  b[from] = null;
+  return attackersOf(b, king, other(p.color)).length === 0;
+}
+
 export function attackersOf(board, i, color) {
   const out = [];
   for (let j = 0; j < 64; j++) {
@@ -100,11 +121,11 @@ export function attackersOf(board, i, color) {
 export function enPrise(board, i) {
   const p = board[i];
   if (!p || p.type === 'k') return false;
-  const attackers = attackersOf(board, i, other(p.color));
+  const attackers = capturers(board, i, other(p.color));
   if (!attackers.length) return false;
   // A king can only take an undefended piece.
   const usable = attackers.filter(a => board[a].type !== 'k');
-  const defenders = attackersOf(withoutPiece(board, i, other(p.color)), i, p.color);
+  const defenders = capturers(withoutPiece(board, i, other(p.color)), i, p.color);
   if (!defenders.length) return true;
   return usable.some(a => VALUE[board[a].type] < VALUE[p.type]);
 }
@@ -112,7 +133,7 @@ export function enPrise(board, i) {
 // After we capture on `sq`, the opponent's cheapest recapture might take
 // over guarding `t`. Does `t` still hang once that happens?
 function stillHangsAfterRecapture(after, sq, t, them) {
-  const recaptures = attackersOf(after, sq, them).filter(a => a !== t);
+  const recaptures = capturers(after, sq, them).filter(a => a !== t);
   if (!recaptures.length) return true;
   const cheapest = recaptures.reduce((a, b) => (VALUE[after[a].type] <= VALUE[after[b].type] ? a : b));
   const b = after.slice();
@@ -131,8 +152,8 @@ export function overloaded(board, us) {
     const p = board[t];
     // Duties are real pieces, not pawns.
     if (!p || p.color !== them || p.type === 'k' || p.type === 'p') continue;
-    if (!attackersOf(board, t, us).length) continue;
-    const guards = attackersOf(withoutPiece(board, t, us), t, them);
+    if (!capturers(board, t, us).length) continue;
+    const guards = capturers(withoutPiece(board, t, us), t, them);
     if (guards.length !== 1 || board[guards[0]].type === 'k') continue;
     const unguarded = board.slice();
     unguarded[guards[0]] = null;
@@ -165,7 +186,7 @@ function worthAttacking(board, t, attackerType) {
   if (p.type === 'k') return true;
   if (VALUE[p.type] > VALUE[attackerType]) return true;
   if (p.type === 'p') return false;
-  return attackersOf(withoutPiece(board, t, other(p.color)), t, p.color).length === 0;
+  return capturers(withoutPiece(board, t, other(p.color)), t, p.color).length === 0;
 }
 
 // All motifs created by `uci` for the side making it.
@@ -250,7 +271,7 @@ export function motifsOfMove(board, uci) {
           arrows: [[to, front], [front, back]],
         });
       } else if (VALUE[pf.type] > VALUE[pb.type] && pb.type !== 'p' &&
-                 (attackersOf(withoutPiece(after, back, us), back, them).length === 0 || VALUE[pb.type] > VALUE[moved.type])) {
+                 (capturers(withoutPiece(after, back, us), back, them).length === 0 || VALUE[pb.type] > VALUE[moved.type])) {
         motifs.push({
           id: 'skewer', tone: 'good',
           text: `Skewer: the ${label(after, front)} must move and the ${label(after, back)} falls`,
@@ -280,18 +301,18 @@ export function motifsOfMove(board, uci) {
     const p = after[t];
     if (!p || p.color !== them || p.type === 'p' || p.type === 'k') continue;
     if (isTrapped(after, t) && !isTrapped(board, t)) {
-      motifs.push({ id: 'trap', tone: 'good', text: `Traps the ${label(after, t)}: every square it can reach is covered`, arrows: attackersOf(after, t, us).slice(0, 1).map(a => [a, t]) });
+      motifs.push({ id: 'trap', tone: 'good', text: `Traps the ${label(after, t)}: every square it can reach is covered`, arrows: capturers(after, t, us).slice(0, 1).map(a => [a, t]) });
     }
   }
 
   // Our own pieces left en prise by this move.
   if (!movedSafe && !(captured && VALUE[captured.type] >= VALUE[moved.type])) {
-    motifs.push({ id: 'hangs', tone: 'bad', text: `The ${NAME[moved.type]} on ${sqName(to)} can be taken`, arrows: attackersOf(after, to, them).slice(0, 1).map(a => [a, to]) });
+    motifs.push({ id: 'hangs', tone: 'bad', text: `The ${NAME[moved.type]} on ${sqName(to)} can be taken`, arrows: capturers(after, to, them).slice(0, 1).map(a => [a, to]) });
   }
   for (let i = 0; i < 64; i++) {
     if (i === to || after[i]?.color !== us || after[i].type === 'k') continue;
     if (enPrise(after, i) && !enPrise(board, i)) {
-      motifs.push({ id: 'hangs', tone: 'bad', text: `Leaves the ${label(after, i)} undefended against attack`, arrows: attackersOf(after, i, them).slice(0, 1).map(a => [a, i]) });
+      motifs.push({ id: 'hangs', tone: 'bad', text: `Leaves the ${label(after, i)} undefended against attack`, arrows: capturers(after, i, them).slice(0, 1).map(a => [a, i]) });
     }
   }
 
@@ -301,12 +322,12 @@ export function motifsOfMove(board, uci) {
     for (let t = 0; t < 64; t++) {
       const p = after[t];
       if (!p || p.color !== them || p.type === 'k' || enPrise(board, t) || !enPrise(after, t)) continue;
-      const guarded = attackersOf(withoutPiece(board, t, us), t, them).includes(to);
+      const guarded = capturers(withoutPiece(board, t, us), t, them).includes(to);
       if (!guarded || !stillHangsAfterRecapture(after, to, t, them)) continue;
       motifs.push({
         id: 'remove-defender', tone: 'good',
         text: `Removes the defender: the ${NAME[captured.type]} on ${sqName(to)} was guarding the ${label(after, t)}, which now hangs`,
-        arrows: attackersOf(after, t, us).slice(0, 1).map(a => [a, t]),
+        arrows: capturers(after, t, us).slice(0, 1).map(a => [a, t]),
       });
       break;
     }

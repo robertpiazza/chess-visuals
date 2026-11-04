@@ -253,3 +253,21 @@ test('an opponent reply that creates a tactic is drawn as its own solid arrow', 
   assert.ok(!reply.dashed, 'the reply move is solid');
   assert.ok(ex.arrows.some(a => a.from === sq('f6') && a.dashed), 'fork lines from f6 stay dashed');
 });
+
+test('regression: a pinned pawn cannot take, so Ngf6 is neither hanging nor a sacrifice', () => {
+  // White's e5 pawn is pinned to Ke1 by the queen on e6, so exf6 is illegal.
+  const fen = 'r3kbnr/pp1npp2/2p1q1pp/3pP3/3P1B2/2NB4/PPP2PPP/R2QK2R b KQkq - 0 9';
+  assert.ok(!motifsOfMove(parseFen(fen).board, 'g8f6').some(m => m.id === 'hangs'));
+  const r = rateMoves([{ uci: 'g8f6', score: { cp: -170 }, pv: ['g8f6', 'f4g3'] }]);
+  assert.equal(forcedTactic(fen, r.get('g8f6')), null);
+});
+
+test('a pinned piece can still capture along the pin line', async () => {
+  const { capturers, sqIndex } = await import('../web/js/tactics.js');
+  // White Re2 is pinned to Ke1 by the black rook on e8, but can take it.
+  const b = parseFen('4r1k1/8/8/8/8/8/4R3/4K3 w - - 0 1').board;
+  assert.deepEqual(capturers(b, sqIndex('e8'), 'w'), [sqIndex('e2')]);
+  // ...but it can't leave the file to take on a5.
+  const b2 = parseFen('4r1k1/8/8/n7/8/8/4R3/4K3 w - - 0 1').board;
+  assert.deepEqual(capturers(b2, sqIndex('a5'), 'w'), []);
+});
