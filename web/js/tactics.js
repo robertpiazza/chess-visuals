@@ -25,7 +25,7 @@ const onBoard = (f, r) => f >= 0 && f < 8 && r >= 0 && r < 8;
 
 export function parseFen(fen) {
   const board = new Array(64).fill(null);
-  const [placement, turn] = fen.split(' ');
+  const [placement, turn, , ep] = fen.split(' ');
   let r = 7, f = 0;
   for (const ch of placement) {
     if (ch === '/') { r--; f = 0; continue; }
@@ -33,6 +33,8 @@ export function parseFen(fen) {
     board[r * 8 + f] = { type: ch.toLowerCase(), color: ch === ch.toLowerCase() ? 'b' : 'w' };
     f++;
   }
+  // En passant target square, kept on the array so capturers() can see it.
+  if (ep && ep !== '-') board.ep = sqIndex(ep);
   return { board, turn };
 }
 
@@ -51,6 +53,9 @@ export function applyUci(board, uci) {
     else { b[rank + 3] = b[rank]; b[rank] = null; }
   }
   b[to] = uci[4] ? { type: uci[4], color: piece.color } : piece;
+  // A double pawn push allows en passant on the next move only. (slice()
+  // doesn't copy the property, so any earlier target is already gone.)
+  if (piece.type === 'p' && Math.abs(to - from) === 16) b.ep = (from + to) / 2;
   return b;
 }
 
@@ -87,17 +92,48 @@ export function attacksFrom(board, i) {
   return out;
 }
 
-// Pieces of `color` that can legally capture on `i`: attackers whose capture
-// doesn't leave their own king attacked. This covers every reason a capture
-// can be illegal: a pin, a check the capture doesn't answer, or the king
-// taking a defended piece.
+// Pieces of `color` that can legally capture the piece on `i`: attackers whose
+// capture doesn't leave their own king attacked. This covers every reason a
+// capture can be illegal: a pin, a check the capture doesn't answer, or the
+// king taking a defended piece. Pawns that can take `i` en passant are
+// included (the capture lands on epLanding(), not on `i`).
 export function capturers(board, i, color) {
-  return attackersOf(board, i, color).filter(a => isLegalCapture(board, a, i));
+  const out = attackersOf(board, i, color).filter(a => isLegalCapture(board, a, i, i));
+  const land = epLanding(board, i, color);
+  if (land >= 0) {
+    for (const a of [i - 1, i + 1]) {
+      if ((a >> 3) === (i >> 3) && board[a]?.type === 'p' && board[a].color === color &&
+          isLegalCapture(board, a, land, i)) out.push(a);
+    }
+  }
+  return out;
 }
 
-function isLegalCapture(board, from, to) {
+// Square a pawn of `color` lands on when taking the pawn on `i` en passant,
+// or -1 if that pawn can't be taken en passant.
+export function epLanding(board, i, color) {
+  const p = board[i];
+  if (board.ep == null || p?.type !== 'p' || p.color === color) return -1;
+  const land = i + (color === 'w' ? 8 : -8);
+  return land === board.ep && !board[land] ? land : -1;
+}
+
+// Arrow for the first legal capture of the piece on `t` by `color` ([] if
+// none). An en passant arrow ends on the square the pawn lands on.
+function captureArrow(board, t, color) {
+  const a = capturers(board, t, color)[0];
+  if (a === undefined) return [];
+  const direct = attackersOf(board, t, color).includes(a);
+  return [[a, direct ? t : epLanding(board, t, color)]];
+}
+
+// Moving `from` to `to` and removing the piece on `taken` leaves the mover's
+// king safe. (`taken` differs from `to` only for en passant, where both pawns
+// leave the rank, which can expose the king along it.)
+function isLegalCapture(board, from, to, taken) {
   const p = board[from];
   const b = board.slice();
+  b[taken] = null;
   b[to] = p;
   b[from] = null;
   const king = kingSquare(b, p.color);
@@ -117,11 +153,21 @@ export function attackersOf(board, i, color) {
 export function enPrise(board, i) {
   const p = board[i];
   if (!p || p.type === 'k') return false;
-  const attackers = capturers(board, i, other(p.color));
+  const them = other(p.color);
+  const attackers = capturers(board, i, them);
   if (!attackers.length) return false;
+  const direct = attackersOf(board, i, them);
+  if (!attackers.some(a => direct.includes(a))) {
+    // Only en passant: pawn for pawn, so it wins one only if nothing can
+    // recapture on the landing square.
+    const land = epLanding(board, i, them);
+    const b = board.slice();
+    b[i] = null;
+    return capturers(withoutPiece(b, land, them), land, p.color).length === 0;
+  }
   // A king can only take an undefended piece.
   const usable = attackers.filter(a => board[a].type !== 'k');
-  const defenders = capturers(withoutPiece(board, i, other(p.color)), i, p.color);
+  const defenders = capturers(withoutPiece(board, i, them), i, p.color);
   if (!defenders.length) return true;
   return usable.some(a => VALUE[board[a].type] < VALUE[p.type]);
 }
@@ -297,18 +343,18 @@ export function motifsOfMove(board, uci) {
     const p = after[t];
     if (!p || p.color !== them || p.type === 'p' || p.type === 'k') continue;
     if (isTrapped(after, t) && !isTrapped(board, t)) {
-      motifs.push({ id: 'trap', tone: 'good', text: `Traps the ${label(after, t)}: every square it can reach is covered`, arrows: capturers(after, t, us).slice(0, 1).map(a => [a, t]) });
+      motifs.push({ id: 'trap', tone: 'good', text: `Traps the ${label(after, t)}: every square it can reach is covered`, arrows: captureArrow(after, t, us) });
     }
   }
 
   // Our own pieces left en prise by this move.
   if (!movedSafe && !(captured && VALUE[captured.type] >= VALUE[moved.type])) {
-    motifs.push({ id: 'hangs', tone: 'bad', text: `The ${NAME[moved.type]} on ${sqName(to)} can be taken`, arrows: capturers(after, to, them).slice(0, 1).map(a => [a, to]) });
+    motifs.push({ id: 'hangs', tone: 'bad', text: `The ${NAME[moved.type]} on ${sqName(to)} can be taken`, arrows: captureArrow(after, to, them) });
   }
   for (let i = 0; i < 64; i++) {
     if (i === to || after[i]?.color !== us || after[i].type === 'k') continue;
     if (enPrise(after, i) && !enPrise(board, i)) {
-      motifs.push({ id: 'hangs', tone: 'bad', text: `Leaves the ${label(after, i)} undefended against attack`, arrows: capturers(after, i, them).slice(0, 1).map(a => [a, i]) });
+      motifs.push({ id: 'hangs', tone: 'bad', text: `Leaves the ${label(after, i)} undefended against attack`, arrows: captureArrow(after, i, them) });
     }
   }
 
@@ -323,7 +369,7 @@ export function motifsOfMove(board, uci) {
       motifs.push({
         id: 'remove-defender', tone: 'good',
         text: `Removes the defender: the ${NAME[captured.type]} on ${sqName(to)} was guarding the ${label(after, t)}, which now hangs`,
-        arrows: capturers(after, t, us).slice(0, 1).map(a => [a, t]),
+        arrows: captureArrow(after, t, us),
       });
       break;
     }

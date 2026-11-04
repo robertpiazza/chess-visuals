@@ -287,23 +287,56 @@ test('capturers matches chess.js legal captures in random games', async () => {
   let seed = 7;
   const rand = n => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
   const name = i => 'abcdefgh'[i & 7] + ((i >> 3) + 1);
-  let checked = 0;
+  let checked = 0, epSeen = 0;
   for (let g = 0; g < 40; g++) {
     const chess = new Chess();
     for (let ply = 0; ply < 80 && !chess.isGameOver(); ply++) {
       const board = parseFen(chess.fen()).board;
       const us = chess.turn();
-      const legal = chess.moves({ verbose: true }).filter(m => m.captured && !m.flags.includes('e'));
+      const legal = chess.moves({ verbose: true }).filter(m => m.captured);
+      // Square of the piece taken: for en passant, the pawn beside the mover.
+      const taken = m => (m.flags.includes('e') ? m.to[0] + m.from[1] : m.to);
       for (let i = 0; i < 64; i++) {
         if (!board[i] || board[i].color === us) continue;
-        const want = [...new Set(legal.filter(m => m.to === name(i)).map(m => m.from))].sort();
+        const want = [...new Set(legal.filter(m => taken(m) === name(i)).map(m => m.from))].sort();
         const got = capturers(board, i, us).map(name).sort();
         assert.deepEqual(got, want, `${chess.fen()} captures on ${name(i)}`);
         checked++;
       }
+      epSeen += legal.filter(m => m.flags.includes('e')).length;
       const moves = chess.moves();
       chess.move(moves[rand(moves.length)]);
     }
   }
   assert.ok(checked > 1000);
+  assert.ok(epSeen > 0, 'no en passant capture came up');
+});
+
+test('en passant: capturers, the horizontal pin, and hanging pawns', async () => {
+  const { capturers, enPrise, sqIndex, applyUci } = await import('../web/js/tactics.js');
+  // Black just played d7-d5; the e5 pawn can take it en passant.
+  let b = parseFen('4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 2').board;
+  assert.deepEqual(capturers(b, sqIndex('d5'), 'w'), [sqIndex('e5')]);
+  assert.equal(enPrise(b, sqIndex('d5')), true);
+  // Without the en passant square in the FEN, it can't.
+  b = parseFen('4k3/8/8/3pP3/8/8/8/4K3 w - - 0 2').board;
+  assert.deepEqual(capturers(b, sqIndex('d5'), 'w'), []);
+  // Both pawns leaving the rank would expose Ka5 to the rook on h5.
+  b = parseFen('7k/8/8/K2pP2r/8/8/8/8 w - d6 0 2').board;
+  assert.deepEqual(capturers(b, sqIndex('d5'), 'w'), []);
+  // A recapture on d6 (from the c7 pawn) means the pawn doesn't hang.
+  b = parseFen('4k3/2p5/8/3pP3/8/8/8/4K3 w - d6 0 2').board;
+  assert.equal(enPrise(b, sqIndex('d5')), false);
+  // applyUci sets the target after a double push and clears it afterwards.
+  b = applyUci(parseFen('4k3/8/8/8/3p4/8/4P3/4K3 w - - 0 1').board, 'e2e4');
+  assert.deepEqual(capturers(b, sqIndex('e4'), 'b'), [sqIndex('d4')]);
+  b = applyUci(b, 'e8e7');
+  assert.deepEqual(capturers(b, sqIndex('e4'), 'b'), []);
+});
+
+test('a double push next to an enemy pawn hangs to en passant, with the arrow to the landing square', async () => {
+  const { motifsOfMove, sqIndex } = await import('../web/js/tactics.js');
+  const m = motifsOfMove(parseFen('4k3/8/8/8/3p4/8/4P3/4K3 w - - 0 1').board, 'e2e4').find(x => x.id === 'hangs');
+  assert.ok(m, 'e4 should be flagged as hanging');
+  assert.deepEqual(m.arrows, [[sqIndex('d4'), sqIndex('e3')]]);
 });
