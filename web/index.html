@@ -68,6 +68,14 @@
           <button id="forward" class="nav-caret" title="Forward one move (→ key)" aria-label="Forward one move" hidden>›</button>
           <button id="flip">Flip</button>
         </div>
+        <div class="voice-row">
+          <input id="say" type="text" placeholder="Type a move: e4, knight to f3, castle…" aria-label="Type a move" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+          <button id="mic" class="mic" title="Say a move" aria-label="Say a move" aria-pressed="false" hidden>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="voice-feedback" id="voice-feedback" aria-live="polite"></div>
+        <p class="hint" id="voice-hint" hidden>Tap the mic and say a move: "pawn to e5", "d7 to d5", "right knight to c3", "castle kingside". Left and right are as you see the board. Speech is recognized by your browser; Chrome sends the audio to Google to do it.</p>
       </div>
 
       <div class="card" id="explain-card" hidden>

@@ -9,6 +9,7 @@ import { badgeHtml } from './icons.js';
 import { motifsOfMove, parseFen, sqName } from './tactics.js';
 import { OPENINGS, identifyOpening, bookContinuations } from './openings.js';
 import { MoveTree } from './tree.js';
+import { resolveAlternatives, isSingleMove } from './voice.js';
 
 const $ = id => document.getElementById(id);
 
@@ -107,6 +108,90 @@ function tryMove(from, to, opts) {
 function playMove(uci, { animate = true } = {}) {
   const move = new Chess(game.fen()).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
   goTo(tree.add(tree.cursor, move), { animate });
+}
+
+// ── Typed and spoken moves ─────────────────────────────────────────────────
+// `texts` are the recognizer's alternatives, best first (one for typed text).
+// Returns true if a move was played or the promotion picker opened.
+function playPhrase(texts) {
+  const fb = $('voice-feedback');
+  if (!humanToMove()) {
+    fb.textContent = game.isGameOver() ? 'The game is over.' : "Wait for the computer's move.";
+    return false;
+  }
+  const { text, moves } = resolveAlternatives(texts, game.moves({ verbose: true }), { orientation });
+  if (!moves.length) {
+    fb.textContent = `No legal move in "${texts[0]}".`;
+    return false;
+  }
+  if (isSingleMove(moves)) {
+    const m = moves[0];
+    fb.textContent = `"${text}" → ${moves.length > 1 ? `${m.to}, promote to…` : m.san}`;
+    if (moves.length > 1) showPromotion(m.from, m.to, moves);
+    else playMove(m.lan);
+    return true;
+  }
+  // Ambiguous: offer each reading. The buttons only work in this position.
+  const fen = game.fen();
+  fb.replaceChildren(`"${text}": which one? `, ...moves.map(m => {
+    const btn = document.createElement('button');
+    btn.textContent = m.san;
+    btn.onclick = () => {
+      if (game.fen() !== fen) { fb.textContent = ''; return; }
+      fb.textContent = m.san;
+      playMove(m.lan);
+    };
+    return btn;
+  }));
+  return false;
+}
+
+function initVoice() {
+  const input = $('say');
+  input.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || !input.value.trim()) return;
+    if (playPhrase([input.value.trim()])) input.value = '';
+  });
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Recognition) return; // Firefox and older browsers: typing only
+  const mic = $('mic');
+  const fb = $('voice-feedback');
+  mic.hidden = false;
+  $('voice-hint').hidden = false;
+  let rec = null;
+  const setListening = on => { mic.classList.toggle('listening', on); mic.setAttribute('aria-pressed', on); };
+  mic.onclick = () => {
+    if (rec) { rec.stop(); return; }
+    rec = new Recognition();
+    rec.lang = 'en-US';
+    rec.interimResults = true;
+    rec.maxAlternatives = 5;
+    rec.continuous = false;
+    rec.onresult = e => {
+      const res = e.results[e.results.length - 1];
+      if (!res.isFinal) { fb.textContent = `Hearing "${res[0].transcript.trim()}"…`; return; }
+      playPhrase(Array.from(res, alt => alt.transcript.trim()).filter(Boolean));
+    };
+    rec.onerror = e => {
+      fb.textContent = e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Microphone access is blocked for this page.'
+        : e.error === 'no-speech' ? "Didn't hear anything. Tap the mic and try again."
+        : e.error === 'network' ? 'Speech recognition needs a network connection.'
+        : e.error === 'aborted' ? '' : `Speech recognition error: ${e.error}`;
+    };
+    rec.onend = () => {
+      rec = null;
+      setListening(false);
+      if (fb.textContent === 'Listening…') fb.textContent = '';
+    };
+    try {
+      rec.start();
+      setListening(true);
+      fb.textContent = 'Listening…';
+    } catch (err) {
+      rec = null;
+      fb.textContent = `Couldn't start speech recognition: ${err.message}`;
+    }
+  };
 }
 
 // Rebuild the game from the root along the cursor's path.
@@ -816,6 +901,7 @@ function initControls() {
 
 async function start() {
   initControls();
+  initVoice();
   onPositionChanged();
   engine = await createEngine(params.get('engine') === 'builtin' ? 'builtin' : 'stockfish');
   $('engine-name').textContent = `Engine: ${engine.name}`;

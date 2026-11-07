@@ -68,6 +68,7 @@ The computer opponent uses the same ratings. "Computer strength" 20 always plays
 - **Game**: play White or Black against the computer, or "Both sides" to rate moves for whoever is to move.
 - **Moves and variations.** Every move is kept in a tree. The **‹ ›** carets (or the ← → keys; Home and End jump to the start and end) step through the game; each caret only appears when there's a move to step to. Playing a different move after stepping back starts a variation; the line you played stays the main line, and nothing is deleted. Forward follows the branch you were last on. The **Moves** list shows the main line with variations in parentheses; click any move to jump to it. The computer only replies at the end of a line you're playing, so you can step back and try moves for either side. **Flip** turns the board.
 - **Engine lines.** In the "Why this move" card, **See the line** inserts the engine's expected continuation of the selected move as a variation and steps into it; **See Nc6 line** does the same for the engine's preferred move. After a move that wasn't best, the review card offers **See why Nc6 was better**, which inserts the engine's line from the position before your move. Engine lines are shown in italics with a purple bar and never replace the main line; playing one of their moves yourself makes it a real move.
+- **Typed and spoken moves.** Type a move in the box under the game buttons and press Enter, or tap the mic and say it: "e4", "pawn to e5", "d7 to d5", "Nf3", "knight takes f6", "bishop takes knight", "right knight to c3", "queen's rook to d1", "castle kingside", "e8 queen". Left and right are as you see the board, so they swap when it's flipped; king's and queen's side don't. Common mishearings ("night", "see", "for") and NATO letters ("echo four") are understood. If a phrase fits more than one move you pick from buttons. The mic uses the browser's speech recognition (Chrome, Edge, Safari; not Firefox), and takes the first of its guesses that names a legal move. Chrome sends the audio to Google to recognize it. Parsing is in `web/js/voice.js`.
 - **Load position (FEN)** starts from any position.
 - Click or drag pieces to move. Clicked moves, the computer's moves and moves played from the side panel glide to their square in about 0.2 s (captured pieces fade, the rook slides when castling); dragged moves and systems with reduced motion turned on skip the animation. Stepping back plays the move backwards: pieces glide back and captured pieces fade back in. In the selected piece's move list, click a row to explain it and double-click to play it. `Esc` clears the selection.
 
@@ -103,6 +104,7 @@ web/
     ├── principles.js        # positional commentary
     ├── explain.js           # combines both with the engine line; forced-tactic icons
     ├── openings.js          # opening library and lookup
+    ├── voice.js             # typed/spoken move phrases → legal moves
     └── engine/
         ├── engine.js        # Stockfish UCI wrapper and built-in engine wrapper
         ├── builtin-worker.js

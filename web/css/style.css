@@ -252,6 +252,15 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 
 summary { cursor: pointer; font-size: 14px; color: var(--muted); }
 .fen-row { display: flex; gap: 6px; margin-top: 8px; }
+.voice-row { display: flex; gap: 6px; margin-top: 10px; }
+.voice-row input { flex: 1; min-width: 0; font-size: 16px; } /* 16px stops iOS zooming on focus */
+.mic { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; }
+.mic.listening { background: #d93b3b; border-color: #d93b3b; color: #fff; animation: mic-pulse 1.2s ease-in-out infinite; }
+@keyframes mic-pulse { 50% { box-shadow: 0 0 0 5px rgba(217, 59, 59, 0.25); } }
+@media (prefers-reduced-motion: reduce) { .mic.listening { animation: none; } }
+.voice-feedback { font-size: 13px; margin-top: 6px; min-height: 1.3em; }
+.voice-feedback:empty { min-height: 0; margin-top: 0; }
+.voice-feedback button { padding: 2px 8px; margin: 2px 4px 0 0; font-size: 13px; }
 .fen-row input { flex: 1; min-width: 0; font-size: 12px; }
 
 @media (max-width: 860px) {
