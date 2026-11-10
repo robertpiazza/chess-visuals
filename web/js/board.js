@@ -221,7 +221,8 @@ export class BoardView {
       for (let f = 0; f < 8; f++) {
         const sq = FILES[f] + r;
         const [x, y] = this.squareOrigin(sq);
-        const light = (f + r) % 2 === 1;
+        // Files are zero-based and ranks are one-based: a1 is dark.
+        const light = (f + r) % 2 === 0;
         el('rect', { x, y, width: 100, height: 100, class: light ? 'sq-light' : 'sq-dark' }, this.layers.squares);
         if (lastMove && (sq === lastMove.from || sq === lastMove.to)) {
           el('rect', { x, y, width: 100, height: 100, class: 'sq-last' }, this.layers.marks);
