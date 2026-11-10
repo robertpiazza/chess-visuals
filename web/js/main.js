@@ -14,7 +14,7 @@ import { resolveAlternatives, isSingleMove } from './voice.js';
 const $ = id => document.getElementById(id);
 
 // ── Settings (remembered per browser) ───────────────────────────────────────
-const DEFAULTS = { mode: 'w', strength: 8, depth: 12, showRings: true, showDests: true, showExplain: true, showBook: true };
+const DEFAULTS = { mode: 'w', strength: 8, depth: 12, showRings: true, showDests: true, showExplain: true, showBook: true, blunderPreventer: false };
 const settings = { ...DEFAULTS, ...loadSettings() };
 
 function loadSettings() {
@@ -407,6 +407,18 @@ function checkSquare() {
   return null;
 }
 
+// Filter display data only: engine ratings and opponent strength stay unchanged.
+function visibleSummary(square) {
+  const summary = analysisReady() ? analysis.summary.get(square) : null;
+  if (!summary || !settings.blunderPreventer) return summary;
+  const moves = summary.moves.filter(m => m.cls === 'blunder');
+  return moves.length ? { ...summary, moves, best: moves[0] } : null;
+}
+
+function visibleRating(rating) {
+  return rating && (!settings.blunderPreventer || rating.cls === 'blunder');
+}
+
 function analysisReady() {
   return !!analysis && analysis.fen === game.fen() && analysis.ratings.size > 0;
 }
@@ -423,7 +435,9 @@ function tacticIcons() {
     }
     iconCache.set(analysis, icons);
   }
-  return icons;
+  return settings.blunderPreventer
+    ? new Map([...icons].filter(([uci]) => visibleRating(analysis.ratings.get(uci))))
+    : icons;
 }
 
 function explain(fen, uci, history) {
@@ -435,10 +449,10 @@ function explain(fen, uci, history) {
 
 // The move the explanation card and arrows describe while a piece is
 // selected: the hovered target, else the row picked in the list, else the
-// piece's best move.
+// piece's best visible move (a blunder when the preventer is enabled).
 function focusRating() {
   if (!selected || !analysisReady()) return null;
-  const summary = analysis.summary.get(selected);
+  const summary = visibleSummary(selected);
   if (!summary) return null;
   const hovered = summary.moves.find(m => m.to === hoverSq);
   return hovered ?? summary.moves.find(m => m.uci === focusUci) ?? summary.best;
@@ -447,7 +461,7 @@ function focusRating() {
 const named = arrows => arrows.map(a => ({ ...a, from: sqName(a.from), to: sqName(a.to) }));
 
 function bookArrows() {
-  if (customStart || !settings.showBook) return [];
+  if (customStart || !settings.showBook || settings.blunderPreventer) return [];
   const legal = game.moves({ verbose: true });
   const history = game.history();
   let sans = bookContinuations(history).map(c => c.san);
@@ -468,7 +482,10 @@ function render() {
     const show = sq => !selected || sq === selected;
     pieceRings = new Map();
     for (const row of game.board()) for (const p of row) {
-      if (p && p.color === game.turn() && show(p.square)) pieceRings.set(p.square, analysis.summary.get(p.square) ?? null);
+      if (p && p.color === game.turn() && show(p.square)) {
+        const summary = visibleSummary(p.square);
+        if (summary || !settings.blunderPreventer) pieceRings.set(p.square, summary);
+      }
     }
     if (icons) {
       pieceIcons = new Map();
@@ -480,7 +497,7 @@ function render() {
     }
   }
   if (selected) {
-    const summary = ready ? analysis.summary.get(selected) : null;
+    const summary = ready ? visibleSummary(selected) : null;
     if (summary && settings.showDests) {
       destinations = destinationsFor(summary);
       if (icons) {
@@ -503,7 +520,7 @@ function render() {
     arrows = bookArrows();
     // What the opponent's last move is up to.
     const last = lastMove();
-    if (settings.showExplain && last && mode !== 'both') {
+    if (settings.showExplain && !settings.blunderPreventer && last && mode !== 'both') {
       const theirs = motifsOfMove(parseFen(last.before).board, last.lan).filter(m => m.tone === 'good');
       arrows.push(...named(theirs.flatMap(m => m.arrows.map(a => ({ from: a[0], to: a[1], tone: 'bad' })))));
     }
@@ -537,7 +554,7 @@ function sanMap() {
 function renderPieceCard() {
   renderExplain();
   const card = $('piece-card');
-  const summary = selected && analysis?.fen === game.fen() ? analysis.summary.get(selected) : null;
+  const summary = selected ? visibleSummary(selected) : null;
   if (!summary || !settings.showDests) { card.hidden = true; return; }
   card.hidden = false;
   const piece = game.get(selected);
@@ -599,7 +616,7 @@ function moveHeadHtml(ex, context) {
 function renderExplain() {
   const card = $('explain-card');
   const body = $('explain-body');
-  if (!settings.showExplain) { card.hidden = true; return; }
+  if (!settings.showExplain || (settings.blunderPreventer && !focusRating())) { card.hidden = true; return; }
 
   const focus = focusRating();
   if (focus) {
@@ -802,7 +819,8 @@ function showPromotion(from, to, options) {
   const box = $('promo');
   box.replaceChildren(...['q', 'r', 'b', 'n'].map(p => {
     const move = options.find(o => o.promotion === p);
-    const r = ratings.get(move.lan);
+    const rating = ratings.get(move.lan);
+    const r = visibleRating(rating) ? rating : null;
     const btn = document.createElement('button');
     if (r) btn.style.borderColor = `var(--cls-${r.cls})`;
     btn.innerHTML = `<img src="pieces/${color}${p.toUpperCase()}.svg" alt="${p}"><span>${r ? formatWhite(r.score, color) : ''}</span>`;
@@ -851,7 +869,7 @@ function initControls() {
     });
     if (id === 'depth') input.addEventListener('change', () => { if (humanToMove()) analyse(); });
   }
-  for (const [id, key] of [['show-rings', 'showRings'], ['show-dests', 'showDests'], ['show-explain', 'showExplain'], ['show-book', 'showBook']]) {
+  for (const [id, key] of [['blunder-preventer', 'blunderPreventer'], ['show-rings', 'showRings'], ['show-dests', 'showDests'], ['show-explain', 'showExplain'], ['show-book', 'showBook']]) {
     const input = $(id);
     input.checked = settings[key];
     input.addEventListener('change', () => {
@@ -859,8 +877,10 @@ function initControls() {
       saveSettings();
       render();
       renderPieceCard();
+      $('opening-card').hidden = settings.blunderPreventer;
     });
   }
+  $('opening-card').hidden = settings.blunderPreventer;
   const practiceSelect = $('practice');
   [...OPENINGS].sort((a, b) => a.name.localeCompare(b.name)).forEach(o => {
     const opt = document.createElement('option');
