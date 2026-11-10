@@ -65,7 +65,7 @@ The computer opponent uses the same ratings. "Computer strength" 20 always plays
 
 ## Controls
 
-- **Blunder preventer** in settings limits piece rings, target ratings and move hints to moves rated Blunder. Hover a red target or select its move-list row to explain it before playing. Opening guidance is hidden while enabled. The setting is remembered in your browser; turn it off to restore full guidance. The individual visual toggles still apply.
+- **Mistake preventer** in settings limits piece rings, target ratings and move hints to moves rated Mistake or Blunder. Hover an orange or red target or select its move-list row to explain it before playing. Opening guidance is hidden while enabled. The setting is remembered in your browser; turn it off to restore full guidance. The individual visual toggles still apply.
 
 - **Game**: play White or Black against the computer, or "Both sides" to rate moves for whoever is to move.
 - **Moves and variations.** Every move is kept in a tree. The **‹ ›** carets (or the ← → keys; Home and End jump to the start and end) step through the game; each caret only appears when there's a move to step to. Playing a different move after stepping back starts a variation; the line you played stays the main line, and nothing is deleted. Forward follows the branch you were last on. The **Moves** list shows the main line with variations in parentheses; click any move to jump to it. The computer only replies at the end of a line you're playing, so you can step back and try moves for either side. **Flip** turns the board.

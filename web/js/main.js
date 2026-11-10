@@ -14,11 +14,17 @@ import { resolveAlternatives, isSingleMove } from './voice.js';
 const $ = id => document.getElementById(id);
 
 // ── Settings (remembered per browser) ───────────────────────────────────────
-const DEFAULTS = { mode: 'w', strength: 8, depth: 12, showRings: true, showDests: true, showExplain: true, showBook: true, blunderPreventer: false };
+const DEFAULTS = { mode: 'w', strength: 8, depth: 12, showRings: true, showDests: true, showExplain: true, showBook: true, mistakePreventer: false };
 const settings = { ...DEFAULTS, ...loadSettings() };
 
 function loadSettings() {
-  try { return JSON.parse(localStorage.getItem('chess-visuals-settings')) || {}; } catch { return {}; }
+  try {
+    const saved = JSON.parse(localStorage.getItem('chess-visuals-settings')) || {};
+    // Keep the enabled state from the original blunder-only setting.
+    if (saved.mistakePreventer == null) saved.mistakePreventer = saved.blunderPreventer ?? false;
+    delete saved.blunderPreventer;
+    return saved;
+  } catch { return {}; }
 }
 function saveSettings() {
   try { localStorage.setItem('chess-visuals-settings', JSON.stringify(settings)); } catch { /* ignore */ }
@@ -410,13 +416,13 @@ function checkSquare() {
 // Filter display data only: engine ratings and opponent strength stay unchanged.
 function visibleSummary(square) {
   const summary = analysisReady() ? analysis.summary.get(square) : null;
-  if (!summary || !settings.blunderPreventer) return summary;
-  const moves = summary.moves.filter(m => m.cls === 'blunder');
+  if (!summary || !settings.mistakePreventer) return summary;
+  const moves = summary.moves.filter(visibleRating);
   return moves.length ? { ...summary, moves, best: moves[0] } : null;
 }
 
 function visibleRating(rating) {
-  return rating && (!settings.blunderPreventer || rating.cls === 'blunder');
+  return rating && (!settings.mistakePreventer || ['mistake', 'blunder'].includes(rating.cls));
 }
 
 function analysisReady() {
@@ -435,7 +441,7 @@ function tacticIcons() {
     }
     iconCache.set(analysis, icons);
   }
-  return settings.blunderPreventer
+  return settings.mistakePreventer
     ? new Map([...icons].filter(([uci]) => visibleRating(analysis.ratings.get(uci))))
     : icons;
 }
@@ -449,7 +455,7 @@ function explain(fen, uci, history) {
 
 // The move the explanation card and arrows describe while a piece is
 // selected: the hovered target, else the row picked in the list, else the
-// piece's best visible move (a blunder when the preventer is enabled).
+// piece's best visible move (a mistake or blunder when the preventer is enabled).
 function focusRating() {
   if (!selected || !analysisReady()) return null;
   const summary = visibleSummary(selected);
@@ -461,7 +467,7 @@ function focusRating() {
 const named = arrows => arrows.map(a => ({ ...a, from: sqName(a.from), to: sqName(a.to) }));
 
 function bookArrows() {
-  if (customStart || !settings.showBook || settings.blunderPreventer) return [];
+  if (customStart || !settings.showBook || settings.mistakePreventer) return [];
   const legal = game.moves({ verbose: true });
   const history = game.history();
   let sans = bookContinuations(history).map(c => c.san);
@@ -484,7 +490,7 @@ function render() {
     for (const row of game.board()) for (const p of row) {
       if (p && p.color === game.turn() && show(p.square)) {
         const summary = visibleSummary(p.square);
-        if (summary || !settings.blunderPreventer) pieceRings.set(p.square, summary);
+        if (summary || !settings.mistakePreventer) pieceRings.set(p.square, summary);
       }
     }
     if (icons) {
@@ -520,7 +526,7 @@ function render() {
     arrows = bookArrows();
     // What the opponent's last move is up to.
     const last = lastMove();
-    if (settings.showExplain && !settings.blunderPreventer && last && mode !== 'both') {
+    if (settings.showExplain && !settings.mistakePreventer && last && mode !== 'both') {
       const theirs = motifsOfMove(parseFen(last.before).board, last.lan).filter(m => m.tone === 'good');
       arrows.push(...named(theirs.flatMap(m => m.arrows.map(a => ({ from: a[0], to: a[1], tone: 'bad' })))));
     }
@@ -616,7 +622,7 @@ function moveHeadHtml(ex, context) {
 function renderExplain() {
   const card = $('explain-card');
   const body = $('explain-body');
-  if (!settings.showExplain || (settings.blunderPreventer && !focusRating())) { card.hidden = true; return; }
+  if (!settings.showExplain || (settings.mistakePreventer && !focusRating())) { card.hidden = true; return; }
 
   const focus = focusRating();
   if (focus) {
@@ -869,7 +875,7 @@ function initControls() {
     });
     if (id === 'depth') input.addEventListener('change', () => { if (humanToMove()) analyse(); });
   }
-  for (const [id, key] of [['blunder-preventer', 'blunderPreventer'], ['show-rings', 'showRings'], ['show-dests', 'showDests'], ['show-explain', 'showExplain'], ['show-book', 'showBook']]) {
+  for (const [id, key] of [['mistake-preventer', 'mistakePreventer'], ['show-rings', 'showRings'], ['show-dests', 'showDests'], ['show-explain', 'showExplain'], ['show-book', 'showBook']]) {
     const input = $(id);
     input.checked = settings[key];
     input.addEventListener('change', () => {
@@ -877,10 +883,10 @@ function initControls() {
       saveSettings();
       render();
       renderPieceCard();
-      $('opening-card').hidden = settings.blunderPreventer;
+      $('opening-card').hidden = settings.mistakePreventer;
     });
   }
-  $('opening-card').hidden = settings.blunderPreventer;
+  $('opening-card').hidden = settings.mistakePreventer;
   const practiceSelect = $('practice');
   [...OPENINGS].sort((a, b) => a.name.localeCompare(b.name)).forEach(o => {
     const opt = document.createElement('option');
