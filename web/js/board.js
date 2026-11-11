@@ -331,12 +331,16 @@ export class BoardView {
     });
   }
 
-  // Arc fill for a target: the winning chance, except for a mate, where every
-  // line wins outright; there it shows speed, the fastest mate in the
-  // position filling the ring and mate in n filling fastest/n of it.
+  // Arc fill for a target: the winning chance after the move. When the
+  // position has a forced mate, the fill keeps moves in score order: mates
+  // fill the top half by speed (the fastest fills the ring, mate in n fills
+  // half plus half of fastest/n), and every other move is scaled into the
+  // bottom half, so a non-mating move never looks better than a mate.
   arcFraction(m, fastestMate) {
-    if (m.score.mate > 0 && fastestMate) return fastestMate / m.score.mate;
-    return m.win / 100;
+    const mateOnBoard = Number.isFinite(fastestMate) && fastestMate > 0;
+    if (!mateOnBoard) return m.win / 100;
+    if (m.score.mate > 0) return 0.5 + 0.5 * fastestMate / m.score.mate;
+    return 0.5 * m.win / 100;
   }
 
   drawDestinations({ destinations, destIcons, plainTargets, pieces, highlight, mover, fastestMate }) {

@@ -71,6 +71,19 @@ test('explanation names the opponent reply for a blunder and compares with best'
   assert.match(ex.comparison.text, /Engine prefers Nc6/);
 });
 
+test('comparison leads with a forced mate the played move misses', () => {
+  const fen = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2';
+  const ratings = rateMoves([
+    { uci: 'b8c6', score: { mate: 5 }, pv: ['b8c6'] },
+    { uci: 'g8f6', score: { mate: 9 }, pv: ['g8f6'] },
+    { uci: 'd8g5', score: { cp: 850 }, pv: ['d8g5'] },
+    { uci: 'a7a6', score: { mate: -3 }, pv: ['a7a6'] },
+  ]);
+  assert.match(explainMove(fen, 'd8g5', ratings).comparison.text, /^Forced mate in 5\. Engine prefers Nc6/);
+  assert.match(explainMove(fen, 'g8f6', ratings).comparison.text, /^Mates in 5 instead of 9\. Engine prefers Nc6/);
+  assert.match(explainMove(fen, 'a7a6', ratings).comparison.text, /^Forced mate in 5\./);
+});
+
 test('every opening line is legal and has a unique name', () => {
   const names = new Set();
   for (const o of OPENINGS) {
