@@ -506,6 +506,11 @@ function render() {
     const summary = ready ? visibleSummary(selected) : null;
     if (summary && settings.showDests) {
       destinations = destinationsFor(summary);
+      // The preventer flags only mistakes and blunders; every other legal
+      // move still gets a plain dot, with no rating shown.
+      if (settings.mistakePreventer) {
+        plainTargets = [...new Set(legalFrom(selected).map(m => m.to))].filter(sq => !destinations.has(sq));
+      }
       if (icons) {
         destIcons = new Map();
         for (const [sq, m] of destinations) {
@@ -530,6 +535,13 @@ function render() {
       const theirs = motifsOfMove(parseFen(last.before).board, last.lan).filter(m => m.tone === 'good');
       arrows.push(...named(theirs.flatMap(m => m.arrows.map(a => ({ from: a[0], to: a[1], tone: 'bad' })))));
     }
+  }
+
+  // The move just played, coloured by how good it was.
+  const played = lastMove();
+  if (played) {
+    const rating = nodeRating(tree.cursor);
+    arrows.unshift({ from: played.from, to: played.to, tone: rating ? `last cls-${rating.cls}` : 'last' });
   }
 
   board.render({
@@ -875,7 +887,7 @@ function initControls() {
     });
     if (id === 'depth') input.addEventListener('change', () => { if (humanToMove()) analyse(); });
   }
-  for (const [id, key] of [['show-rings', 'showRings'], ['show-dests', 'showDests'], ['show-explain', 'showExplain'], ['show-book', 'showBook']]) {
+  for (const [id, key] of [['mistake-preventer', 'mistakePreventer'], ['show-rings', 'showRings'], ['show-dests', 'showDests'], ['show-explain', 'showExplain'], ['show-book', 'showBook']]) {
     const input = $(id);
     input.checked = settings[key];
     input.addEventListener('change', () => {
