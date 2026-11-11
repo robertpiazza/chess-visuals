@@ -31,9 +31,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy web/ to gh-pages branch
+      # Version the CSS and JS URLs with the commit so browsers don't mix a
+      # new index.html with cached old scripts after a deploy.
+      - name: Build site with versioned asset URLs
+        run: |
+          cp -r web _site
+          node scripts/stamp-version.mjs _site "${GITHUB_SHA::7}"
+
+      - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./web
+          publish_dir: ./_site
           force_orphan: true
