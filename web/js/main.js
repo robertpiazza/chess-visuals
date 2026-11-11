@@ -875,7 +875,7 @@ function initControls() {
     });
     if (id === 'depth') input.addEventListener('change', () => { if (humanToMove()) analyse(); });
   }
-  for (const [id, key] of [['mistake-preventer', 'mistakePreventer'], ['show-rings', 'showRings'], ['show-dests', 'showDests'], ['show-explain', 'showExplain'], ['show-book', 'showBook']]) {
+  for (const [id, key] of [['show-rings', 'showRings'], ['show-dests', 'showDests'], ['show-explain', 'showExplain'], ['show-book', 'showBook']]) {
     const input = $(id);
     input.checked = settings[key];
     input.addEventListener('change', () => {
