@@ -20,8 +20,9 @@ const settings = { ...DEFAULTS, ...loadSettings() };
 function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem('chess-visuals-settings')) || {};
-    // Keep the enabled state from the original blunder-only setting.
-    if (saved.mistakePreventer == null) saved.mistakePreventer = saved.blunderPreventer ?? false;
+    // The mistake preventer always starts off: it's turned on per session,
+    // not remembered. (blunderPreventer is its old, blunder-only name.)
+    delete saved.mistakePreventer;
     delete saved.blunderPreventer;
     return saved;
   } catch { return {}; }
