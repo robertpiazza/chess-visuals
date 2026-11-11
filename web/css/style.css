@@ -172,6 +172,10 @@ body {
 }
 .card h2 { font-size: 14px; margin: 0 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .status { font-weight: 600; min-height: 1.45em; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.menu-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 6px; line-height: 0; }
+.menu-toggle[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.settings-menu { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); }
 .row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
 .row label { font-size: 13px; color: var(--muted); }
 .row output { color: var(--text); font-weight: 600; margin-left: 4px; }

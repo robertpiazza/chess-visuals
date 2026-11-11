@@ -875,6 +875,16 @@ function newGame(fen) {
 }
 
 function initControls() {
+  // Settings live in a menu opened from the button beside the status line.
+  const menu = $('settings-menu'), toggle = $('menu-toggle');
+  const setMenu = open => { menu.hidden = !open; toggle.setAttribute('aria-expanded', String(open)); };
+  toggle.addEventListener('click', () => setMenu(menu.hidden));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !menu.hidden) { setMenu(false); toggle.focus(); }
+  });
+  document.addEventListener('pointerdown', e => {
+    if (!menu.hidden && !menu.contains(e.target) && !toggle.contains(e.target)) setMenu(false);
+  });
   $('mode').value = settings.mode;
   for (const [id, key] of [['strength', 'strength'], ['depth', 'depth']]) {
     const input = $(id);

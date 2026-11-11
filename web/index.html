@@ -45,7 +45,30 @@
     </section>
 
     <aside class="panel">
-      <div class="status" id="status">Loading engine…</div>
+      <div class="panel-head">
+        <div class="status" id="status">Loading engine…</div>
+        <button id="menu-toggle" class="menu-toggle" aria-label="Settings" title="Settings" aria-expanded="false" aria-controls="settings-menu">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <div class="card settings-menu" id="settings-menu" hidden>
+        <h2>Settings</h2>
+        <div class="row">
+          <label for="strength">Computer strength <output id="strength-out"></output></label>
+          <input type="range" id="strength" min="0" max="20" step="1">
+        </div>
+        <div class="row">
+          <label for="depth">Rating depth <output id="depth-out"></output></label>
+          <input type="range" id="depth" min="6" max="20" step="1">
+        </div>
+        <label class="check"><input type="checkbox" id="mistake-preventer" aria-describedby="mistake-preventer-help"> Mistake preventer</label>
+        <label class="check"><input type="checkbox" id="show-rings"> Rings on my pieces</label>
+        <label class="check"><input type="checkbox" id="show-dests"> Ratings on moves of the selected piece</label>
+        <label class="check"><input type="checkbox" id="show-explain"> Tactic icons, arrows and explanations</label>
+        <label class="check"><input type="checkbox" id="show-book"> Book moves as arrows</label>
+        <div class="engine-name" id="engine-name"></div>
+      </div>
 
       <div class="card">
         <div class="row">
@@ -97,23 +120,6 @@
         <h2>Moves</h2>
         <div class="history" id="history"></div>
         <p class="hint">← → step through moves, Home/End jump to the start or end. Play a different move after stepping back to start a variation; the line you played stays the main line.</p>
-      </div>
-
-      <div class="card">
-        <div class="row">
-          <label for="strength">Computer strength <output id="strength-out"></output></label>
-          <input type="range" id="strength" min="0" max="20" step="1">
-        </div>
-        <div class="row">
-          <label for="depth">Rating depth <output id="depth-out"></output></label>
-          <input type="range" id="depth" min="6" max="20" step="1">
-        </div>
-        <label class="check"><input type="checkbox" id="mistake-preventer" aria-describedby="mistake-preventer-help"> Mistake preventer</label>
-        <label class="check"><input type="checkbox" id="show-rings"> Rings on my pieces</label>
-        <label class="check"><input type="checkbox" id="show-dests"> Ratings on moves of the selected piece</label>
-        <label class="check"><input type="checkbox" id="show-explain"> Tactic icons, arrows and explanations</label>
-        <label class="check"><input type="checkbox" id="show-book"> Book moves as arrows</label>
-        <div class="engine-name" id="engine-name"></div>
       </div>
 
       <div class="card legend">
