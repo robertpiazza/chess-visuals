@@ -279,18 +279,18 @@ export function explainMove(fen, uci, ratings, history = []) {
     const bestForced = forcedTactic(fen, best);
     if (bestForced?.sound && bestForced.when === 'next' && !mine.has(bestForced.id)) reasons.unshift(`forces ${bestForced.noun}`);
     const line = sanLine(fen, best.pv.slice(0, 4)).join(' ');
-    // A forced mate outweighs everything else, so it leads.
+    // A forced mate outweighs everything else, so it comes right after the scores.
     const bm = best.score.mate, rm = rating.score.mate;
-    const lead = bm > 0 && !(rm > 0) ? `Forced mate in ${bm}. `
-      : bm > 0 && rm > bm ? `Mates in ${bm} instead of ${rm}. `
-      : rm < 0 && !(bm < 0) ? `Your move allows mate in ${-rm}. `
+    const mateNote = bm > 0 && !(rm > 0) ? `: forced mate in ${bm}, and yours doesn't force mate`
+      : bm > 0 && rm > bm ? `: mates in ${bm} instead of ${rm}`
+      : rm < 0 && !(bm < 0) ? `: yours allows mate in ${-rm}`
       : '';
     comparison = {
       san: bestSan,
       uci: best.uci,
       text: rating.cls === 'best'
         ? `Rated Best along with the engine's top choice, ${bestSan} (${formatWhite(best.score, mover)}).`
-        : `${lead}Engine prefers ${bestSan} (${formatPair(best.score, rating.score, mover).join(' vs ')})` +
+        : `Engine prefers ${bestSan} (${formatPair(best.score, rating.score, mover).join(' vs ')})${mateNote}` +
         (reasons.length
           ? `. What it does that yours doesn't: ${[...new Set(reasons)].slice(0, 3).join('; ')}.`
           : `. The difference shows in the follow-up: ${line}.`),
