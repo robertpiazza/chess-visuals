@@ -1,0 +1,385 @@
+// SVG board. Each square is 100×100 user units, so the board is 800×800.
+//
+// Overlays:
+//   pieceRings   — Map square → piece summary. Draws a pie ring around the
+//                  piece with one slice per legal move, best → worst
+//                  clockwise from the top, coloured by move quality.
+//   destinations — Map square → rating, for the selected piece. Draws a disc
+//                  tinted by quality, an arc filled to the win% after the
+//                  move, and the engine score.
+
+import { formatWhite } from './analysis.js?v=c8f3f8a';
+import { hasGlyph, glyphMarkup, iconTitle } from './icons.js?v=c8f3f8a';
+
+const NS = 'http://www.w3.org/2000/svg';
+const FILES = 'abcdefgh';
+
+const RING_IN = 40, RING_OUT = 48;
+const DEST_IN = 22, DEST_OUT = 31;
+const STAR_PATH = 'M 0 -9 L 2.6 -3.1 9 -2.8 4 1.3 5.6 7.5 0 4 -5.6 7.5 -4 1.3 -9 -2.8 -2.6 -3.1 Z';
+
+function el(tag, attrs = {}, parent) {
+  const node = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  parent?.appendChild(node);
+  return node;
+}
+
+// Annulus segment between angles a0..a1 (radians, 0 = 12 o'clock, clockwise).
+function arcPath(cx, cy, rIn, rOut, a0, a1) {
+  if (a1 - a0 >= Math.PI * 2 - 1e-6) {
+    // Full ring: two half-arcs on each radius, outer clockwise, inner back.
+    return `M ${cx} ${cy - rOut} A ${rOut} ${rOut} 0 1 1 ${cx} ${cy + rOut} A ${rOut} ${rOut} 0 1 1 ${cx} ${cy - rOut} Z ` +
+           `M ${cx} ${cy - rIn} A ${rIn} ${rIn} 0 1 0 ${cx} ${cy + rIn} A ${rIn} ${rIn} 0 1 0 ${cx} ${cy - rIn} Z`;
+  }
+  const pt = (r, a) => [cx + r * Math.sin(a), cy - r * Math.cos(a)];
+  const large = a1 - a0 > Math.PI ? 1 : 0;
+  const [x0, y0] = pt(rOut, a0), [x1, y1] = pt(rOut, a1);
+  const [x2, y2] = pt(rIn, a1), [x3, y3] = pt(rIn, a0);
+  return `M ${x0} ${y0} A ${rOut} ${rOut} 0 ${large} 1 ${x1} ${y1} L ${x2} ${y2} A ${rIn} ${rIn} 0 ${large} 0 ${x3} ${y3} Z`;
+}
+
+export class BoardView {
+  constructor(container, { onSquareDown, onSquareUp, onHover }) {
+    this.svg = el('svg', { viewBox: '0 0 800 800', class: 'board', role: 'img', 'aria-label': 'Chess board' });
+    container.appendChild(this.svg);
+    this.layers = {};
+    // 'overlay' holds score pills, stars and badges so arrows never cover them.
+    for (const name of ['squares', 'marks', 'rings', 'pieces', 'dests', 'arrows', 'overlay', 'labels', 'drag']) {
+      this.layers[name] = el('g', { class: `layer-${name}` }, this.svg);
+    }
+    this.orientation = 'w';
+    this.callbacks = { onSquareDown, onSquareUp, onHover };
+    this.drag = null;
+    this.hoverSq = null;
+
+    this.svg.addEventListener('pointerdown', e => this.pointerDown(e));
+    this.svg.addEventListener('pointermove', e => this.pointerMove(e));
+    this.svg.addEventListener('pointerup', e => this.pointerUp(e));
+    this.svg.addEventListener('pointerleave', () => this.setHover(null));
+    this.svg.addEventListener('pointercancel', () => this.endDrag());
+    // Marker sizes depend on the board's on-screen size, so redraw on resize.
+    if (typeof ResizeObserver === 'function') {
+      new ResizeObserver(() => { if (this.lastState) this.render(this.lastState); }).observe(this.svg);
+    }
+  }
+
+  squareOrigin(sq) {
+    const f = sq.charCodeAt(0) - 97, r = +sq[1];
+    return this.orientation === 'w' ? [f * 100, (8 - r) * 100] : [(7 - f) * 100, (r - 1) * 100];
+  }
+
+  squareAt(x, y) {
+    const col = Math.floor(x / 100), row = Math.floor(y / 100);
+    if (col < 0 || col > 7 || row < 0 || row > 7) return null;
+    return this.orientation === 'w' ? FILES[col] + (8 - row) : FILES[7 - col] + (row + 1);
+  }
+
+  svgPoint(e) {
+    const rect = this.svg.getBoundingClientRect();
+    return [(e.clientX - rect.left) * 800 / rect.width, (e.clientY - rect.top) * 800 / rect.height];
+  }
+
+  pointerDown(e) {
+    if (e.button !== 0) return;
+    const sq = this.squareAt(...this.svgPoint(e));
+    if (!sq) return;
+    const draggable = this.callbacks.onSquareDown(sq);
+    if (draggable) {
+      this.svg.setPointerCapture(e.pointerId);
+      const pieceNode = this.layers.pieces.querySelector(`[data-sq="${sq}"]`);
+      this.drag = { from: sq, pieceNode, ghost: null, moved: false, start: this.svgPoint(e) };
+    }
+  }
+
+  pointerMove(e) {
+    const [x, y] = this.svgPoint(e);
+    this.setHover(this.squareAt(x, y));
+    const d = this.drag;
+    if (!d || !d.pieceNode) return;
+    if (!d.moved && Math.hypot(x - d.start[0], y - d.start[1]) < 8) return;
+    if (!d.ghost) {
+      d.moved = true;
+      d.ghost = d.pieceNode.cloneNode();
+      d.ghost.setAttribute('class', 'piece ghost');
+      d.pieceNode.style.opacity = '0.3';
+      this.layers.drag.appendChild(d.ghost);
+    }
+    d.ghost.setAttribute('x', x - 50);
+    d.ghost.setAttribute('y', y - 50);
+  }
+
+  pointerUp(e) {
+    const sq = this.squareAt(...this.svgPoint(e));
+    const d = this.drag;
+    this.endDrag();
+    if (d && !d.moved && sq === d.from) {
+      this.callbacks.onSquareUp(sq, { click: true });
+    } else if (sq) {
+      this.callbacks.onSquareUp(sq, { click: !d });
+    }
+  }
+
+  endDrag() {
+    const d = this.drag;
+    if (!d) return;
+    d.ghost?.remove();
+    if (d.pieceNode) d.pieceNode.style.opacity = '';
+    this.drag = null;
+  }
+
+  setHover(sq) {
+    if (sq === this.hoverSq) return;
+    this.hoverSq = sq;
+    this.callbacks.onHover?.(sq);
+  }
+
+  // state: { pieces: chess.board(), orientation, lastMove, checkSq, selected,
+  //          pieceRings, pieceIcons, destinations, destIcons, plainTargets,
+  //          highlight, arrows, mover }
+  // mover: 'w' or 'b', the side the move ratings belong to (scores are shown
+  // from White's side).
+  // pieceIcons / destIcons: Map square → { letter, glyph, label } for forced tactics.
+  // arrows: [{ from, to, tone: 'good' | 'bad' | 'neutral' | 'book' | 'move', dashed }]
+  render(state) {
+    this.lastState = state;
+    this.orientation = state.orientation;
+    // Stars and tactic badges keep a minimum size on screen: about 18 px
+    // for a badge and 16 px for a star. On a phone, where a square is only
+    // ~40 px, that means drawing them up to ~2x larger than on a desktop.
+    const squarePx = this.svg.getBoundingClientRect().width / 8 || 100;
+    this.badgeScale = Math.min(2.4, Math.max(1, 1800 / squarePx / 22));
+    this.starScale = Math.min(2.4, Math.max(1, 1600 / squarePx / 18));
+    for (const layer of Object.values(this.layers)) {
+      if (layer !== this.layers.drag) layer.replaceChildren();
+    }
+    this.drawSquares(state);
+    this.drawRings(state);
+    this.drawPieces(state);
+    this.drawDestinations(state);
+    this.drawArrows(state);
+  }
+
+  // Small badge in a square's bottom-left corner marking a forced tactic
+  // (clear of the rank numbers top-left and file letters bottom-right): a
+  // pictogram (fork, pin, skewer) or a letter.
+  // Centre for a marker of radius r near a square's corner: mostly over the
+  // corner, so a larger marker overhangs the edge rather than covering the
+  // piece, but kept on the board. corner is 'bl' (bottom-left) or 'tr'.
+  cornerPoint(x, y, corner, r) {
+    const inset = r * 0.3;
+    const cx = corner === 'bl' ? x + inset : x + 100 - inset;
+    const cy = corner === 'bl' ? y + 100 - inset : y + inset;
+    const clamp = v => Math.min(800 - r, Math.max(r, v));
+    return [clamp(cx), clamp(cy)];
+  }
+
+  drawStar(parent, x, y, scale) {
+    const [cx, cy] = this.cornerPoint(x, y, 'tr', 9 * scale);
+    el('path', { d: STAR_PATH, transform: `translate(${cx} ${cy}) scale(${scale})`, class: 'best-star' }, parent);
+  }
+
+  // Badge at a square's bottom-left corner. Returns its right edge.
+  drawIcon(parent, x, y, icon, scale = 1) {
+    const cls = 'tactic-badge' + (icon.sound === false ? ' is-unsound' : '');
+    const [cx, cy] = this.cornerPoint(x, y, 'bl', 12 * scale);
+    const g = el('g', { class: cls, transform: `translate(${cx} ${cy}) scale(${scale})` }, parent);
+    el('title', {}, g).textContent = iconTitle(icon);
+    el('circle', { r: 11 }, g);
+    if (hasGlyph(icon)) {
+      const glyph = el('g', { transform: 'translate(-8 -8) scale(0.667)' }, g);
+      glyph.innerHTML = glyphMarkup(icon);
+    } else {
+      el('text', { y: 5, 'text-anchor': 'middle' }, g).textContent = icon.letter;
+    }
+    return cx + 12 * scale;
+  }
+
+  drawArrows({ arrows }) {
+    if (!arrows) return;
+    const seen = new Set();
+    for (const a of arrows) {
+      const key = `${a.from}${a.to}${a.tone}`;
+      if (a.from === a.to || seen.has(key)) continue;
+      seen.add(key);
+      const [x0, y0] = this.squareOrigin(a.from).map(v => v + 50);
+      const [x1, y1] = this.squareOrigin(a.to).map(v => v + 50);
+      const len = Math.hypot(x1 - x0, y1 - y0);
+      const ux = (x1 - x0) / len, uy = (y1 - y0) / len;
+      const head = 22, start = 18, end = 14;
+      const sx = x0 + ux * start, sy = y0 + uy * start;
+      const hx = x1 - ux * end, hy = y1 - uy * end;
+      const bx = hx - ux * head, by = hy - uy * head;
+      const g = el('g', { class: `arrow arrow-${a.tone}` + (a.dashed ? ' is-dashed' : '') }, this.layers.arrows);
+      el('line', { x1: sx, y1: sy, x2: bx, y2: by }, g);
+      el('path', { d: `M ${hx} ${hy} L ${bx - uy * 13} ${by + ux * 13} L ${bx + uy * 13} ${by - ux * 13} Z` }, g);
+    }
+  }
+
+  drawSquares({ lastMove, checkSq, selected }) {
+    for (let r = 1; r <= 8; r++) {
+      for (let f = 0; f < 8; f++) {
+        const sq = FILES[f] + r;
+        const [x, y] = this.squareOrigin(sq);
+        // Files are zero-based and ranks are one-based: a1 is dark.
+        const light = (f + r) % 2 === 0;
+        el('rect', { x, y, width: 100, height: 100, class: light ? 'sq-light' : 'sq-dark' }, this.layers.squares);
+        if (lastMove && (sq === lastMove.from || sq === lastMove.to)) {
+          el('rect', { x, y, width: 100, height: 100, class: 'sq-last' }, this.layers.marks);
+        }
+        if (sq === selected) el('rect', { x, y, width: 100, height: 100, class: 'sq-selected' }, this.layers.marks);
+        if (sq === checkSq) el('circle', { cx: x + 50, cy: y + 50, r: 48, class: 'sq-check' }, this.layers.marks);
+
+        // Coordinates along the bottom and left edges.
+        const bottom = this.orientation === 'w' ? r === 1 : r === 8;
+        const left = this.orientation === 'w' ? f === 0 : f === 7;
+        const cls = light ? 'coord coord-on-light' : 'coord coord-on-dark';
+        if (bottom) el('text', { x: x + 94, y: y + 95, class: cls, 'text-anchor': 'end' }, this.layers.labels).textContent = FILES[f];
+        if (left) el('text', { x: x + 5, y: y + 19, class: cls }, this.layers.labels).textContent = r;
+      }
+    }
+  }
+
+  drawRings({ pieceRings, pieceIcons, selected }) {
+    if (!pieceRings) return;
+    for (const [sq, summary] of pieceRings) {
+      const [x, y] = this.squareOrigin(sq);
+      const cx = x + 50, cy = y + 50;
+      const g = el('g', { class: 'piece-ring' + (sq === selected ? ' is-selected' : '') }, this.layers.rings);
+      if (!summary || !summary.moves.length) {
+        el('path', { d: arcPath(cx, cy, RING_IN + 2, RING_OUT - 2, 0, Math.PI * 2), class: 'ring-none' }, g);
+        continue;
+      }
+      el('path', { d: arcPath(cx, cy, RING_IN - 1, RING_OUT + 1, 0, Math.PI * 2), class: 'ring-track' }, g);
+      const n = summary.moves.length;
+      const gap = n > 1 ? Math.min(0.06, Math.PI / n / 3) : 0;
+      const step = (Math.PI * 2) / n;
+      summary.moves.forEach((m, i) => {
+        el('path', {
+          d: arcPath(cx, cy, RING_IN, RING_OUT, i * step + gap / 2, (i + 1) * step - gap / 2),
+          class: `seg cls-${m.cls}`,
+        }, g);
+      });
+      // Star every piece that has at least one move rated Best. Once a piece
+      // is selected its star moves to the best target square(s) instead.
+      if (summary.best.cls === 'best' && sq !== selected) {
+        this.drawStar(this.layers.overlay, x, y, this.starScale);
+      }
+      const icon = pieceIcons?.get(sq);
+      if (icon) this.drawIcon(this.layers.overlay, x, y, icon, this.badgeScale);
+    }
+  }
+
+  // Animate pieces into the position about to be rendered. `steps` play one
+  // after another; each is { moves: [{ from, to }], fadeOut?: { square,
+  // piece }, fadeIn?: square }: pieces glide from -> to, a captured piece
+  // fades out where it stood (playing a move), or a restored piece fades back
+  // in (undo). Called before the render that shows the new position. The
+  // board redraws often (every engine update), so each redraw picks the
+  // animation up where it is instead of restarting.
+  animateMove(steps) {
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.anim = reduce ? null : { steps: [].concat(steps), start: performance.now(), duration: 200 };
+  }
+
+  drawPieces({ pieces }) {
+    const nodes = new Map();
+    for (const row of pieces) {
+      for (const p of row) {
+        if (!p) continue;
+        const [x, y] = this.squareOrigin(p.square);
+        nodes.set(p.square, el('image', {
+          href: `pieces/${p.color}${p.type.toUpperCase()}.svg`,
+          x, y, width: 100, height: 100,
+          class: 'piece',
+          'data-sq': p.square,
+        }, this.layers.pieces));
+      }
+    }
+
+    const anim = this.anim;
+    const elapsed = anim ? performance.now() - anim.start : 0;
+    if (!anim || elapsed >= anim.duration * anim.steps.length || typeof Element.prototype.animate !== 'function') {
+      this.anim = null;
+      return;
+    }
+    anim.steps.forEach((step, i) => {
+      const delay = i * anim.duration - elapsed;
+      const timing = { duration: anim.duration, delay, easing: 'cubic-bezier(.25,.75,.35,1)', fill: 'backwards' };
+      if (step.fadeOut) {
+        // The captured piece fades out where it stood, under the mover.
+        const [x, y] = this.squareOrigin(step.fadeOut.square);
+        const ghost = el('image', { href: `pieces/${step.fadeOut.piece}.svg`, x, y, width: 100, height: 100, class: 'piece' });
+        this.layers.pieces.prepend(ghost);
+        ghost.animate([{ opacity: 1 }, { opacity: 0 }], { ...timing, fill: 'both' });
+      }
+      if (step.fadeIn && nodes.has(step.fadeIn)) {
+        // A piece restored by undo fades back in on its square.
+        nodes.get(step.fadeIn).animate([{ opacity: 0 }, { opacity: 1 }], timing);
+      }
+      for (const { from, to } of step.moves) {
+        const node = nodes.get(to);
+        if (!node) continue;
+        const [fx, fy] = this.squareOrigin(from);
+        const [tx, ty] = this.squareOrigin(to);
+        this.layers.pieces.append(node); // moving piece on top
+        node.animate([
+          { transform: `translate(${fx - tx}px, ${fy - ty}px)` },
+          { transform: 'translate(0px, 0px)' },
+        ], timing);
+      }
+    });
+  }
+
+  // Arc fill for a target: the winning chance after the move. When the
+  // position has a forced mate, the fill keeps moves in score order: mates
+  // fill the top half by speed (the fastest fills the ring, mate in n fills
+  // half plus half of fastest/n), and every other move is scaled into the
+  // bottom half, so a non-mating move never looks better than a mate.
+  arcFraction(m, fastestMate) {
+    const mateOnBoard = Number.isFinite(fastestMate) && fastestMate > 0;
+    if (!mateOnBoard) return m.win / 100;
+    if (m.score.mate > 0) return 0.5 + 0.5 * fastestMate / m.score.mate;
+    return 0.5 * m.win / 100;
+  }
+
+  drawDestinations({ destinations, destIcons, plainTargets, pieces, highlight, mover, fastestMate }) {
+    const occupied = new Set(pieces.flat().filter(Boolean).map(p => p.square));
+    if (plainTargets) {
+      for (const sq of plainTargets) {
+        const [x, y] = this.squareOrigin(sq);
+        if (occupied.has(sq)) el('circle', { cx: x + 50, cy: y + 50, r: 44, class: 'target-capture' }, this.layers.dests);
+        else el('circle', { cx: x + 50, cy: y + 50, r: 13, class: 'target-dot' }, this.layers.dests);
+      }
+    }
+    if (!destinations) return;
+    for (const [sq, m] of destinations) {
+      const [x, y] = this.squareOrigin(sq);
+      const cx = x + 50, cy = y + 50;
+      const cls = `dest cls-${m.cls}` + (sq === highlight ? ' is-hover' : '');
+      const g = el('g', { class: cls }, this.layers.dests);
+      const top = el('g', { class: cls }, this.layers.overlay);
+      const fill = Math.max(0.05, this.arcFraction(m, fastestMate)) * Math.PI * 2;
+      if (occupied.has(sq)) {
+        // Capture: ring around the target piece.
+        el('path', { d: arcPath(cx, cy, RING_IN, RING_OUT, 0, Math.PI * 2), class: 'dest-track' }, g);
+        el('path', { d: arcPath(cx, cy, RING_IN, RING_OUT, 0, fill), class: 'dest-arc' }, g);
+      } else {
+        el('circle', { cx, cy, r: DEST_IN - 1, class: 'dest-disc' }, g);
+        el('path', { d: arcPath(cx, cy, DEST_IN, DEST_OUT, 0, Math.PI * 2), class: 'dest-track' }, g);
+        el('path', { d: arcPath(cx, cy, DEST_IN, DEST_OUT, 0, fill), class: 'dest-arc' }, g);
+      }
+      if (m.cls === 'best') {
+        this.drawStar(top, x, y, Math.max(1.2, this.starScale));
+      }
+      const icon = destIcons?.get(sq);
+      const badgeRight = icon ? this.drawIcon(top, x, y, icon, Math.max(1.2, this.badgeScale)) : 0;
+      const label = formatWhite(m.score, mover);
+      const w = 10 + label.length * 10;
+      // Shift the score pill right if needed to clear a bottom-left badge.
+      const px = icon ? Math.min(x + 100 - w, Math.max(cx - w / 2, badgeRight + 2)) : cx - w / 2;
+      el('rect', { x: px, y: y + 76, width: w, height: 22, rx: 11, class: 'dest-pill' }, top);
+      el('text', { x: px + w / 2, y: y + 92, 'text-anchor': 'middle', class: 'dest-label' }, top).textContent = label;
+    }
+  }
+}
