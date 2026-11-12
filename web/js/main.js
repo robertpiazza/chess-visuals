@@ -426,6 +426,15 @@ function visibleRating(rating) {
   return rating && (!settings.mistakePreventer || ['mistake', 'blunder'].includes(rating.cls));
 }
 
+// With the preventer on, the one move that isn't a mistake or blunder, when
+// there's exactly one. Waits for the full-depth rating so a shallow pass
+// can't name the wrong move.
+function onlySafeMove() {
+  if (!settings.mistakePreventer || !humanToMove() || !analysisReady() || !analysis.done) return null;
+  const safe = [...analysis.ratings.values()].filter(r => !['mistake', 'blunder'].includes(r.cls));
+  return safe.length === 1 ? safe[0] : null;
+}
+
 function analysisReady() {
   return !!analysis && analysis.fen === game.fen() && analysis.ratings.size > 0;
 }
@@ -537,6 +546,9 @@ function render() {
       arrows.push(...named(theirs.flatMap(m => m.arrows.map(a => ({ from: a[0], to: a[1], tone: 'bad' })))));
     }
   }
+
+  const only = onlySafeMove();
+  if (only) arrows.push({ from: only.from, to: only.to, tone: `only cls-${only.cls}` });
 
   // The move just played, coloured by how good it was.
   const played = lastMove();
@@ -793,7 +805,9 @@ function updateStatus() {
   if (humanToMove()) {
     const who = tree.cursor.engine ? 'Engine line (→ next move, ← back)'
       : mode === 'both' ? (game.turn() === 'w' ? 'White' : 'Black') + ' to move' : 'Your move';
-    el.textContent = analysis?.done && analysis.fen === game.fen()
+    const only = onlySafeMove();
+    el.textContent = only ? `${who} · only ${sanMap().get(only.uci)} avoids a mistake`
+      : analysis?.done && analysis.fen === game.fen()
       ? `${who} · rated at depth ${depth}`
       : `${who} · rating moves${depth ? ` (depth ${depth})` : ''}…`;
   } else {
@@ -904,6 +918,7 @@ function initControls() {
     input.addEventListener('change', () => {
       settings[key] = input.checked;
       saveSettings();
+      updateStatus();
       render();
       renderPieceCard();
       $('opening-card').hidden = settings.mistakePreventer;

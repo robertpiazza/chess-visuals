@@ -292,14 +292,16 @@ summary { cursor: pointer; font-size: 14px; color: var(--muted); }
 .arrow-move line { stroke: #0f766e; } .arrow-move path { fill: #0f766e; }
 .arrow-book line { stroke: #2563eb; } .arrow-book path { fill: #2563eb; }
 .arrow-book { opacity: 0.6; }
-/* The move just played, coloured by its rating (grey until rated). */
+/* The move just played (and, under the mistake preventer, the only safe
+   move), coloured by its rating; the last move is grey until rated. */
 .arrow-last { opacity: 0.6; }
 .arrow-last line { stroke: #64748b; } .arrow-last path { fill: #64748b; }
-.arrow-last.cls-best line { stroke: var(--cls-best); } .arrow-last.cls-best path { fill: var(--cls-best); }
-.arrow-last.cls-good line { stroke: var(--cls-good); } .arrow-last.cls-good path { fill: var(--cls-good); }
-.arrow-last.cls-inaccuracy line { stroke: var(--cls-inaccuracy); } .arrow-last.cls-inaccuracy path { fill: var(--cls-inaccuracy); }
-.arrow-last.cls-mistake line { stroke: var(--cls-mistake); } .arrow-last.cls-mistake path { fill: var(--cls-mistake); }
-.arrow-last.cls-blunder line { stroke: var(--cls-blunder); } .arrow-last.cls-blunder path { fill: var(--cls-blunder); }
+.arrow-only { opacity: 0.85; }
+.arrow.cls-best line { stroke: var(--cls-best); } .arrow.cls-best path { fill: var(--cls-best); }
+.arrow.cls-good line { stroke: var(--cls-good); } .arrow.cls-good path { fill: var(--cls-good); }
+.arrow.cls-inaccuracy line { stroke: var(--cls-inaccuracy); } .arrow.cls-inaccuracy path { fill: var(--cls-inaccuracy); }
+.arrow.cls-mistake line { stroke: var(--cls-mistake); } .arrow.cls-mistake path { fill: var(--cls-mistake); }
+.arrow.cls-blunder line { stroke: var(--cls-blunder); } .arrow.cls-blunder path { fill: var(--cls-blunder); }
 
 /* Explanation card */
 .explain-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
