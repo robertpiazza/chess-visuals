@@ -465,13 +465,15 @@ function explain(fen, uci, history) {
 
 // The move the explanation card and arrows describe while a piece is
 // selected: the hovered target, else the row picked in the list, else the
-// piece's best visible move (a mistake or blunder when the preventer is enabled).
+// piece's best move. With the preventer on there is no fallback: a mistake
+// is previewed only while its target is hovered or its row was picked.
 function focusRating() {
   if (!selected || !analysisReady()) return null;
   const summary = visibleSummary(selected);
   if (!summary) return null;
   const hovered = summary.moves.find(m => m.to === hoverSq);
-  return hovered ?? summary.moves.find(m => m.uci === focusUci) ?? summary.best;
+  const picked = summary.moves.find(m => m.uci === focusUci);
+  return hovered ?? picked ?? (settings.mistakePreventer ? null : summary.best);
 }
 
 const named = arrows => arrows.map(a => ({ ...a, from: sqName(a.from), to: sqName(a.to) }));
