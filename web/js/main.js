@@ -494,6 +494,7 @@ function render() {
   const icons = human ? tacticIcons() : null;
   let pieceRings = null, pieceIcons = null, destinations = null, destIcons = null, plainTargets = null;
   let arrows = [];
+  let previewing = false;
 
   if (human && ready && settings.showRings) {
     // With a piece selected, only its ring stays, to cut clutter.
@@ -536,6 +537,7 @@ function render() {
     }
     const focus = focusRating();
     if (focus && settings.showExplain) {
+      previewing = true;
       const ex = explain(game.fen(), focus.uci, game.history({ verbose: true }));
       arrows = [{ from: focus.from, to: focus.to, tone: 'move' }, ...named(ex.arrows)];
     }
@@ -552,9 +554,10 @@ function render() {
   const only = onlySafeMove();
   if (only) arrows.push({ from: only.from, to: only.to, tone: `only cls-${only.cls}` });
 
-  // The move just played, coloured by how good it was.
+  // The move just played, coloured by how good it was. Hidden while a move
+  // is previewed so its arrow doesn't compete with the preview.
   const played = lastMove();
-  if (played) {
+  if (played && !previewing) {
     const rating = nodeRating(tree.cursor);
     arrows.unshift({ from: played.from, to: played.to, tone: rating ? `last cls-${rating.cls}` : 'last' });
   }
