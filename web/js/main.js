@@ -465,13 +465,15 @@ function explain(fen, uci, history) {
 
 // The move the explanation card and arrows describe while a piece is
 // selected: the hovered target, else the row picked in the list, else the
-// piece's best visible move (a mistake or blunder when the preventer is enabled).
+// piece's best move. With the preventer on there is no fallback: a mistake
+// is previewed only while its target is hovered or its row was picked.
 function focusRating() {
   if (!selected || !analysisReady()) return null;
   const summary = visibleSummary(selected);
   if (!summary) return null;
   const hovered = summary.moves.find(m => m.to === hoverSq);
-  return hovered ?? summary.moves.find(m => m.uci === focusUci) ?? summary.best;
+  const picked = summary.moves.find(m => m.uci === focusUci);
+  return hovered ?? picked ?? (settings.mistakePreventer ? null : summary.best);
 }
 
 const named = arrows => arrows.map(a => ({ ...a, from: sqName(a.from), to: sqName(a.to) }));
@@ -492,6 +494,7 @@ function render() {
   const icons = human ? tacticIcons() : null;
   let pieceRings = null, pieceIcons = null, destinations = null, destIcons = null, plainTargets = null;
   let arrows = [];
+  let previewing = false;
 
   if (human && ready && settings.showRings) {
     // With a piece selected, only its ring stays, to cut clutter.
@@ -534,6 +537,7 @@ function render() {
     }
     const focus = focusRating();
     if (focus && settings.showExplain) {
+      previewing = true;
       const ex = explain(game.fen(), focus.uci, game.history({ verbose: true }));
       arrows = [{ from: focus.from, to: focus.to, tone: 'move' }, ...named(ex.arrows)];
     }
@@ -550,9 +554,10 @@ function render() {
   const only = onlySafeMove();
   if (only) arrows.push({ from: only.from, to: only.to, tone: `only cls-${only.cls}` });
 
-  // The move just played, coloured by how good it was.
+  // The move just played, coloured by how good it was. Hidden while a move
+  // is previewed so its arrow doesn't compete with the preview.
   const played = lastMove();
-  if (played) {
+  if (played && !previewing) {
     const rating = nodeRating(tree.cursor);
     arrows.unshift({ from: played.from, to: played.to, tone: rating ? `last cls-${rating.cls}` : 'last' });
   }
