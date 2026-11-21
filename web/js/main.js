@@ -6,7 +6,8 @@ import {
 } from './analysis.js';
 import { explainMove, forcedTactic, TACTIC_ICONS } from './explain.js';
 import { badgeHtml } from './icons.js';
-import { motifsOfMove, parseFen, sqName } from './tactics.js';
+import { motifsOfMove, parseFen, sqName, applyUci } from './tactics.js';
+import { pieceSafety } from './safety.js';
 import { OPENINGS, identifyOpening, bookContinuations } from './openings.js';
 import { MoveTree } from './tree.js';
 import { resolveAlternatives, isSingleMove } from './voice.js';
@@ -590,7 +591,10 @@ function render() {
     arrows.unshift({ from: played.from, to: played.to, tone: rating ? `last cls-${rating.cls}` : 'last' });
   }
 
+  const safetyStyle = params.get('safety');
   board.render({
+    safety: safetyStyle ? safetyView() : null,
+    safetyStyle,
     mover: game.turn(),
     // Fastest mate in the position, so slower mates show a part-filled ring.
     fastestMate: ready ? Math.min(Infinity, ...[...analysis.ratings.values()].filter(r => r.score.mate > 0).map(r => r.score.mate)) : null,
@@ -607,6 +611,17 @@ function render() {
     highlight: hoverSq,
     arrows,
   });
+}
+
+// Piece safety for the board as shown, or, while a selected piece is dragged
+// or hovered over one of its targets, for the position after that move.
+function safetyView() {
+  const { board: b } = parseFen(game.fen());
+  if (selected && hoverSq && hoverSq !== selected) {
+    const move = legalFrom(selected).find(m => m.to === hoverSq);
+    if (move) return pieceSafety(applyUci(b, move.lan));
+  }
+  return pieceSafety(b);
 }
 
 function sanMap() {

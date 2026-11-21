@@ -101,6 +101,31 @@ body {
 .coord-on-dark { fill: var(--sq-light); }
 
 .piece { pointer-events: none; }
+
+/* Piece safety prototype */
+.safety { pointer-events: none; }
+.safety-border { fill: none; stroke-width: 6; }
+.safety-border.safe-protected, .safety-border.safe-holds { stroke: #2563eb; }
+.safety-border.safe-loose { stroke: #64748b; stroke-dasharray: 10 7; }
+.safety-border.safe-loses { stroke: #dc2626; stroke-width: 8; }
+.safety-border.safe-wins { stroke: #d97706; stroke-width: 8; }
+.safety-tint.safe-protected, .safety-tint.safe-holds { fill: rgba(37, 99, 235, 0.28); }
+.safety-tint.safe-loose { fill: rgba(100, 116, 139, 0.12); }
+.safety-tint.safe-loses { fill: rgba(220, 38, 38, 0.5); }
+.safety-tint.safe-wins { fill: rgba(245, 158, 11, 0.5); }
+.safety-plate.safe-protected, .safety-plate.safe-holds { fill: #2563eb; opacity: 0.75; }
+.safety-plate.safe-loose { fill: none; stroke: #475569; stroke-width: 3; stroke-dasharray: 6 5; }
+.safety-plate.safe-loses { fill: #dc2626; opacity: 0.85; }
+.safety-plate.safe-wins { fill: #f59e0b; opacity: 0.85; }
+.safety-bar { stroke: rgba(255, 255, 255, 0.8); stroke-width: 1.5; }
+.safety-bar.safe-protected, .safety-bar.safe-holds { fill: #2563eb; }
+.safety-bar.safe-loose { fill: none; stroke: #475569; stroke-width: 2.5; stroke-dasharray: 5 4; }
+.safety-bar.safe-loses { fill: #dc2626; }
+.safety-bar.safe-wins { fill: #f59e0b; }
+.safety-num rect { stroke: #fff; stroke-width: 2; }
+.safety-num.safe-loses rect { fill: #dc2626; }
+.safety-num.safe-wins rect { fill: #d97706; }
+.safety-num text { fill: #fff; font: 700 15px system-ui, sans-serif; text-anchor: middle; dominant-baseline: middle; }
 .ghost { opacity: 0.9; }
 
 /* Piece rings */
