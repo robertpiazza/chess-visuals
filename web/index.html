@@ -101,6 +101,35 @@
         <p class="hint" id="voice-hint" hidden>Tap the mic and say a move: "pawn to e5", "d7 to d5", "right knight to c3", "castle kingside". Left and right are as you see the board. Speech is recognized by your browser; Chrome sends the audio to Google to do it.</p>
       </div>
 
+      <div class="card" id="online-card">
+        <h2>Play a friend online</h2>
+        <div id="online-setup">
+          <div class="row">
+            <label for="online-color">You play</label>
+            <select id="online-color">
+              <option value="w">White</option>
+              <option value="b">Black</option>
+              <option value="random">Random side</option>
+            </select>
+          </div>
+          <label class="check"><input type="checkbox" id="online-aids"> Allow ratings and explanations during the game</label>
+          <div class="buttons"><button id="online-create" class="primary">Create game</button></div>
+          <div class="fen-row">
+            <input id="online-code" type="text" placeholder="Code from your opponent" aria-label="Room code" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+            <button id="online-join">Join</button>
+          </div>
+        </div>
+        <div id="online-room" hidden>
+          <p class="online-info" id="online-info"></p>
+          <div class="buttons">
+            <button id="online-copy" class="primary">Copy invite link</button>
+            <button id="online-resign">Resign</button>
+            <button id="online-leave">Leave</button>
+          </div>
+        </div>
+        <p class="online-error" id="online-error" aria-live="polite"></p>
+      </div>
+
       <div class="card" id="explain-card" hidden>
         <h2 id="explain-title">Why this move</h2>
         <div id="explain-body"></div>
