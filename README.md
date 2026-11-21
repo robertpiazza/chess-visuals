@@ -74,6 +74,22 @@ The computer opponent uses the same ratings. "Computer strength" 20 always plays
 - **Load position (FEN)** starts from any position.
 - Click or drag pieces to move. Clicked moves, the computer's moves and moves played from the side panel glide to their square in about 0.2 s (captured pieces fade, the rook slides when castling); dragged moves and systems with reduced motion turned on skip the animation. Stepping back plays the move backwards: pieces glide back and captured pieces fade back in. In the selected piece's move list, click a row to explain it and double-click to play it. `Esc` clears the selection.
 
+## Play a friend online
+
+The **Play a friend online** card sets up a game between two people.
+
+- **Create game**: pick your side (White, Black or random) and whether ratings and explanations are allowed during the game. You get a 6-character room code and a **Copy invite link** button. The link opens the site and joins the game; the other player can also type the code into the card and press **Join**.
+- Moves sync through Firebase Realtime Database. Your opponent's move appears on your board as soon as it's played.
+- **Ratings and explanations.** If the host didn't allow them, both players see a plain board while the game is live: no rings, target ratings, arrows, explanations, opening card or eval bar, and the engine doesn't run. They return for both players once the game ends, so you can review it. If the host allowed them, each player's own settings menu applies as usual.
+- **Stepping back** works as in a normal game: you can step back and try moves as a local variation, and End returns to the live position. Only moves played at the live position are sent.
+- **Resign** ends the game for both players. **Leave** returns to playing the computer.
+- **Reloading** the page rejoins the game as the same side, since the room code stays in the address bar. The seat is remembered per browser tab, so opening the invite link in a second tab joins as the opponent (handy for trying it out alone). A room takes two players; a third person who opens the link is turned away.
+- No undo, clocks or draw offers.
+
+Games are stored in the `piazza555` Firebase project (shared with 5-3 Chess) under `chessVisuals/rooms/{code}`: the room's settings, the moves keyed by ply, and the result. The database rules that allow this are in `firebase-rules.json`; add its `chessVisuals` block next to the existing rules in the Firebase console (Realtime Database → Rules). Until it's added, the database refuses online games and the card says so.
+
+For testing without the network, add `?net=local` to the URL: rooms are kept in the browser and shared between its tabs.
+
 ## Running locally
 
 ES modules and Web Workers need an HTTP server (not `file://`):
@@ -107,6 +123,8 @@ web/
     ├── explain.js           # combines both with the engine line; forced-tactic icons
     ├── openings.js          # opening library and lookup
     ├── voice.js             # typed/spoken move phrases → legal moves
+    ├── network.js           # online games: rooms and moves in Firebase
+    ├── online.js            # room codes and move-list helpers
     └── engine/
         ├── engine.js        # Stockfish UCI wrapper and built-in engine wrapper
         ├── builtin-worker.js

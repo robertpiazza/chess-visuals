@@ -1,0 +1,25 @@
+{
+  "rules": {
+    "chessVisuals": {
+      "rooms": {
+        "$code": {
+          ".read": "$code.length === 6",
+          "meta": {
+            ".write": "!data.exists() || (data.child('guestJoined').val() === false && newData.child('guestJoined').val() === true && newData.child('hostColor').val() === data.child('hostColor').val() && newData.child('aids').val() === data.child('aids').val())",
+            ".validate": "newData.hasChildren(['hostColor', 'aids', 'guestJoined']) && (newData.child('hostColor').val() === 'w' || newData.child('hostColor').val() === 'b') && newData.child('aids').isBoolean() && newData.child('guestJoined').isBoolean()"
+          },
+          "moves": {
+            "$ply": {
+              ".write": "!data.exists() && root.child('chessVisuals/rooms/' + $code + '/meta/guestJoined').val() === true && !root.child('chessVisuals/rooms/' + $code + '/result').exists()",
+              ".validate": "newData.hasChildren(['uci', 'color']) && newData.child('uci').isString() && newData.child('uci').val().length <= 5 && (newData.child('color').val() === 'w' || newData.child('color').val() === 'b')"
+            }
+          },
+          "result": {
+            ".write": "!data.exists()",
+            ".validate": "newData.child('type').val() === 'resign' && (newData.child('color').val() === 'w' || newData.child('color').val() === 'b')"
+          }
+        }
+      }
+    }
+  }
+}

@@ -10,6 +10,8 @@ import { motifsOfMove, parseFen, sqName } from './tactics.js';
 import { OPENINGS, identifyOpening, bookContinuations } from './openings.js';
 import { MoveTree } from './tree.js';
 import { resolveAlternatives, isSingleMove } from './voice.js';
+import { Room } from './network.js';
+import { parseCode } from './online.js';
 
 const $ = id => document.getElementById(id);
 
@@ -50,6 +52,11 @@ let practice = null;               // opening being practiced, or null
 let customStart = false;           // game began from a loaded FEN (no book)
 const iconCache = new WeakMap();   // analysis → Map uci → forced-tactic icon
 const explainCache = new Map();    // fen|uci|depth → explanation
+// Online game against another person, or null:
+//   { room, code, color, aids, joined, tip, result }
+// `tip` is the tree node of the latest move in the shared game; stepping back
+// and trying moves elsewhere stays local, like any variation.
+let online = null;
 
 const board = new BoardView($('board-wrap'), {
   onSquareDown, onSquareUp,
@@ -62,6 +69,7 @@ const board = new BoardView($('board-wrap'), {
 // the computer only replies at the end of a line you're playing.
 function humanToMove() {
   if (game.isGameOver()) return false;
+  if (online && tree.cursor === online.tip) return online.joined && !online.result && game.turn() === online.color;
   return mode === 'both' || game.turn() === mode || !!tree.main(tree.cursor) || tree.cursor.engine;
 }
 
@@ -114,7 +122,15 @@ function tryMove(from, to, opts) {
 // position already has a continuation.
 function playMove(uci, { animate = true } = {}) {
   const move = new Chess(game.fen()).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
-  goTo(tree.add(tree.cursor, move), { animate });
+  // A move at the tip of an online game is sent to the opponent.
+  const send = online && tree.cursor === online.tip && humanToMove();
+  const ply = tree.path().length;
+  const node = tree.add(tree.cursor, move);
+  if (send) {
+    online.tip = node;
+    online.room.sendMove(ply, uci).catch(onlineError);
+  }
+  goTo(node, { animate });
 }
 
 // ── Typed and spoken moves ─────────────────────────────────────────────────
@@ -123,7 +139,9 @@ function playMove(uci, { animate = true } = {}) {
 function playPhrase(texts) {
   const fb = $('voice-feedback');
   if (!humanToMove()) {
-    fb.textContent = game.isGameOver() ? 'The game is over.' : "Wait for the computer's move.";
+    fb.textContent = game.isGameOver() || online?.result ? 'The game is over.'
+      : online && !online.joined ? 'Wait for your opponent to join.'
+      : online ? "Wait for your opponent's move." : "Wait for the computer's move.";
     return false;
   }
   const { text, moves } = resolveAlternatives(texts, game.moves({ verbose: true }), { orientation });
@@ -289,14 +307,17 @@ function onPositionChanged() {
   renderHistory();
   renderPieceCard();
   renderOpening();
+  renderOnline();
   $('fen').value = game.fen();
+  updateStatus();
   if (game.isGameOver()) {
     analysis = null;
     showGameOver();
-    updateStatus();
+    updateEvalBar();
     return;
   }
-  $('banner').hidden = true;
+  if (online?.result && tree.cursor === online.tip) showGameOver();
+  else $('banner').hidden = true;
   analyse();
 }
 
@@ -304,6 +325,12 @@ function onPositionChanged() {
 async function analyse() {
   if (!engine) return;
   const token = ++searchToken;
+  if (aidsHidden()) {
+    analysis = null;
+    updateStatus();
+    updateEvalBar();
+    return;
+  }
   const fen = game.fen();
   const human = humanToMove();
   const cached = cache.get(fen);
@@ -340,7 +367,7 @@ function setAnalysis(fen, lines, depth, done) {
 function afterAnalysis(token, human) {
   updateStatus();
   updateEvalBar();
-  if (human) {
+  if (human || online) {
     render();
     renderPieceCard();
   } else {
@@ -479,7 +506,7 @@ function focusRating() {
 const named = arrows => arrows.map(a => ({ ...a, from: sqName(a.from), to: sqName(a.to) }));
 
 function bookArrows() {
-  if (customStart || !settings.showBook || settings.mistakePreventer) return [];
+  if (customStart || !settings.showBook || settings.mistakePreventer || aidsHidden()) return [];
   const legal = game.moves({ verbose: true });
   const history = game.history();
   let sans = bookContinuations(history).map(c => c.san);
@@ -545,7 +572,7 @@ function render() {
     arrows = bookArrows();
     // What the opponent's last move is up to.
     const last = lastMove();
-    if (settings.showExplain && !settings.mistakePreventer && last && mode !== 'both') {
+    if (settings.showExplain && !settings.mistakePreventer && !aidsHidden() && last && mode !== 'both') {
       const theirs = motifsOfMove(parseFen(last.before).board, last.lan).filter(m => m.tone === 'good');
       arrows.push(...named(theirs.flatMap(m => m.arrows.map(a => ({ from: a[0], to: a[1], tone: 'bad' })))));
     }
@@ -652,7 +679,7 @@ function moveHeadHtml(ex, context) {
 function renderExplain() {
   const card = $('explain-card');
   const body = $('explain-body');
-  if (!settings.showExplain || (settings.mistakePreventer && !focusRating())) { card.hidden = true; return; }
+  if (!settings.showExplain || aidsHidden() || (settings.mistakePreventer && !focusRating())) { card.hidden = true; return; }
 
   const focus = focusRating();
   if (focus) {
@@ -691,7 +718,7 @@ function renderExplain() {
     const ex = explain(mv.before, mv.lan, hist.slice(0, idx));
     const yours = mode === 'both' || mv.color === mode;
     const who = path[idx].engine ? `Engine line (${mv.color === 'w' ? 'White' : 'Black'})`
-      : mode === 'both' ? (mv.color === 'w' ? 'White' : 'Black') : yours ? 'Your move' : 'Computer\'s move';
+      : mode === 'both' ? (mv.color === 'w' ? 'White' : 'Black') : yours ? 'Your move' : online ? 'Opponent\'s move' : 'Computer\'s move';
     const shown = { ...ex, rating: ex.rating ?? null };
     if (!yours) {
       // For the opponent's move, keep what it threatens and skip the comparison.
@@ -804,23 +831,30 @@ function plyHtml(node, forceNumber) {
 
 function updateStatus() {
   const el = $('status');
-  if (!engine) { el.textContent = 'Loading engine…'; return; }
   if (game.isGameOver()) { el.textContent = gameOverText(); return; }
+  const offGame = online && tree.cursor !== online.tip;
+  if (online?.result && !offGame) { el.textContent = onlineResultText(); return; }
+  if (online && !online.joined) { el.textContent = `Waiting for your opponent to join · code ${online.code}`; return; }
+  if (online && !offGame && !humanToMove()) { el.textContent = "Opponent's move"; return; }
+  if (!engine && !aidsHidden()) { el.textContent = 'Loading engine…'; return; }
   const depth = analysis?.fen === game.fen() ? analysis.depth : 0;
   if (humanToMove()) {
     const who = tree.cursor.engine ? 'Engine line (→ next move, ← back)'
+      : offGame ? 'Off the game line (End returns to it)'
       : mode === 'both' ? (game.turn() === 'w' ? 'White' : 'Black') + ' to move' : 'Your move';
+    if (aidsHidden()) { el.textContent = who; return; }
     const only = onlySafeMove();
     el.textContent = only ? `${who} · only ${sanMap().get(only.uci)} avoids a mistake`
       : analysis?.done && analysis.fen === game.fen()
       ? `${who} · rated at depth ${depth}`
       : `${who} · rating moves${depth ? ` (depth ${depth})` : ''}…`;
   } else {
-    el.textContent = 'Computer is thinking…';
+    el.textContent = online ? 'Off the game line (End returns to it)' : 'Computer is thinking…';
   }
 }
 
 function updateEvalBar() {
+  $('evalbar').style.visibility = aidsHidden() ? 'hidden' : '';
   if (!analysis?.ratings.size) return;
   const best = [...analysis.ratings.values()].find(m => m.rank === 0);
   const sign = game.turn() === 'w' ? 1 : -1;
@@ -836,7 +870,7 @@ function gameOverText() {
   if (game.isCheckmate()) {
     const winner = game.turn() === 'w' ? 'Black' : 'White';
     if (mode === 'both') return `Checkmate · ${winner} wins`;
-    return winner[0].toLowerCase() === mode ? 'Checkmate · you win' : 'Checkmate · computer wins';
+    return winner[0].toLowerCase() === mode ? 'Checkmate · you win' : `Checkmate · ${online ? 'opponent' : 'computer'} wins`;
   }
   if (game.isStalemate()) return 'Draw by stalemate';
   if (game.isThreefoldRepetition()) return 'Draw by repetition';
@@ -846,8 +880,12 @@ function gameOverText() {
 
 function showGameOver() {
   const banner = $('banner');
-  banner.innerHTML = `<div>${gameOverText()}</div><button class="primary">New game</button>`;
-  banner.querySelector('button').onclick = newGame;
+  const text = game.isGameOver() ? gameOverText() : onlineResultText();
+  // Online, a finished position off the game line leads back to the game.
+  const label = !online ? 'New game' : tree.cursor === online.tip ? 'Leave game' : 'Back to the game';
+  banner.innerHTML = `<div>${text}</div><button class="primary">${label}</button>`;
+  banner.querySelector('button').onclick = !online ? newGame
+    : tree.cursor === online.tip ? leaveOnline : () => goTo(online.tip, { animate: false });
   banner.hidden = false;
 }
 
@@ -872,6 +910,184 @@ function showPromotion(from, to, options) {
 function hidePromotion() {
   pendingPromotion = null;
   $('promo').hidden = true;
+}
+
+// ── Online play ─────────────────────────────────────────────────────────────
+// Ratings, rings, arrows and explanations are hidden during an online game
+// unless the host allowed them; they come back once the game is over.
+function aidsHidden() {
+  return !!online && !online.aids && !onlineOver();
+}
+
+// The shared game has ended: resigned, or the latest position is final.
+let overMemo = { fen: null, over: false };
+function onlineOver() {
+  if (!online) return false;
+  if (online.result) return true;
+  if (overMemo.fen !== online.tip.fen) overMemo = { fen: online.tip.fen, over: new Chess(online.tip.fen).isGameOver() };
+  return overMemo.over;
+}
+
+function updateOpeningCard() {
+  $('opening-card').hidden = settings.mistakePreventer || aidsHidden();
+}
+
+function onlineResultText() {
+  if (online?.result?.type !== 'resign') return '';
+  return online.result.color === online.color ? 'You resigned' : 'Your opponent resigned · you win';
+}
+
+function onlineError(err) {
+  $('online-error').textContent = /permission/i.test(err?.message ?? err?.code ?? '')
+    ? 'The game server refused the request. Its database rules may not allow online games yet.'
+    : err?.message ?? String(err);
+}
+
+function inviteLink(code) {
+  const url = new URL(location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('room', code);
+  // Keep test and engine options so both players use the same setup.
+  for (const key of ['net', 'engine']) if (params.get(key)) url.searchParams.set(key, params.get(key));
+  return url.href;
+}
+
+// Put the room in the address bar, so a reload rejoins the game.
+function setRoomParam(code) {
+  const url = new URL(location.href);
+  if (code) url.searchParams.set('room', code); else url.searchParams.delete('room');
+  history.replaceState(null, '', url);
+}
+
+async function createOnline() {
+  const choice = $('online-color').value;
+  const color = choice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : choice;
+  $('online-error').textContent = '';
+  $('online-create').disabled = true;
+  try {
+    startOnline(await Room.create({ color, aids: $('online-aids').checked }));
+  } catch (err) {
+    onlineError(err);
+  } finally {
+    $('online-create').disabled = false;
+  }
+}
+
+async function joinOnline(code) {
+  $('online-error').textContent = '';
+  $('online-join').disabled = true;
+  try {
+    startOnline(await Room.join(code));
+  } catch (err) {
+    onlineError(err);
+    setRoomParam(null);
+  } finally {
+    $('online-join').disabled = false;
+  }
+}
+
+function startOnline(room) {
+  if (online) online.room.leave();
+  searchToken++;
+  practice = null;
+  $('practice').value = '';
+  game = new Chess();
+  tree = new MoveTree(game.fen());
+  customStart = false;
+  online = { room, code: room.code, color: room.color, aids: room.aids, joined: room.joined, tip: tree.root, result: null };
+  mode = orientation = room.color;
+  selected = null;
+  hidePromotion();
+  setRoomParam(room.code);
+  room.onError = onlineError;
+  if (!room.joined) room.onJoined(() => { online.joined = true; onPositionChanged(); });
+  room.onMoves(onOnlineMoves);
+  room.onResult(result => { online.result = result; onPositionChanged(); });
+  onPositionChanged();
+  updateOpeningCard();
+  updateEvalBar();
+}
+
+// Apply moves from the shared game that aren't on the board yet. Our own
+// moves come back too; they're already there, so they're skipped.
+function onOnlineMoves(list) {
+  if (!online) return;
+  const atTip = tree.cursor === online.tip;
+  let added = 0;
+  for (let ply = tree.path(online.tip).length; ply < list.length; ply++) {
+    const { uci } = list[ply];
+    let move;
+    try {
+      move = new Chess(online.tip.fen).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+    } catch {
+      onlineError(new Error(`Received a move that isn't legal here (${uci}).`));
+      break;
+    }
+    online.tip = tree.add(online.tip, move);
+    added++;
+  }
+  if (!added) return;
+  // Follow the game if you were at its latest move; otherwise leave you
+  // where you are and just update the move list.
+  if (atTip) goTo(online.tip, { animate: added === 1 });
+  else { renderHistory(); renderNav(); updateStatus(); renderOnline(); }
+  updateOpeningCard();
+}
+
+function leaveOnline() {
+  if (!online) return;
+  online.room.leave();
+  online = null;
+  setRoomParam(null);
+  $('online-error').textContent = '';
+  newGame();
+  updateOpeningCard();
+  updateEvalBar();
+}
+
+function renderOnline() {
+  $('online-setup').hidden = !!online;
+  $('online-room').hidden = !online;
+  for (const id of ['mode', 'practice', 'new-game', 'load-fen']) $(id).disabled = !!online;
+  if (!online) return;
+  const over = onlineOver();
+  const side = online.color === 'w' ? 'White' : 'Black';
+  const lines = [`Room <b>${online.code}</b> · you play ${side}`];
+  if (!online.joined) lines.push('Send your opponent the invite link or the code. They join from this card.');
+  if (over) lines.push('Game over. Step back through the moves to review them.');
+  else lines.push(online.aids ? 'Ratings and explanations are on for both players.' : 'Ratings and explanations are off until the game ends.');
+  $('online-info').innerHTML = lines.join('<br>');
+  $('online-copy').hidden = online.joined;
+  $('online-resign').hidden = !online.joined || over;
+}
+
+function initOnline() {
+  $('online-create').onclick = createOnline;
+  const join = () => {
+    const code = parseCode($('online-code').value);
+    if (code) joinOnline(code);
+    else $('online-error').textContent = 'Enter the 6-character code from your opponent.';
+  };
+  $('online-join').onclick = join;
+  $('online-code').addEventListener('keydown', e => { if (e.key === 'Enter') join(); });
+  $('online-copy').onclick = async () => {
+    const link = inviteLink(online.code);
+    try {
+      await navigator.clipboard.writeText(link);
+      $('online-error').textContent = 'Invite link copied.';
+    } catch {
+      $('online-error').textContent = link;
+    }
+  };
+  $('online-resign').onclick = () => {
+    if (online && confirm('Resign this game?')) online.room.resign().catch(onlineError);
+  };
+  $('online-leave').onclick = () => {
+    const live = online && online.joined && !onlineOver();
+    if (!live || confirm('Leave this game? To come back, open the invite link again in this tab.')) leaveOnline();
+  };
+  renderOnline();
 }
 
 // ── Controls ────────────────────────────────────────────────────────────────
@@ -926,10 +1142,10 @@ function initControls() {
       updateStatus();
       render();
       renderPieceCard();
-      $('opening-card').hidden = settings.mistakePreventer;
+      updateOpeningCard();
     });
   }
-  $('opening-card').hidden = settings.mistakePreventer;
+  updateOpeningCard();
   const practiceSelect = $('practice');
   [...OPENINGS].sort((a, b) => a.name.localeCompare(b.name)).forEach(o => {
     const opt = document.createElement('option');
@@ -955,7 +1171,7 @@ function initControls() {
     if (e.key === 'Escape') { hidePromotion(); select(null); return; }
     // Arrow keys step through the moves, unless typing in a field.
     if (e.target.closest('input, select, textarea') || e.altKey || e.ctrlKey || e.metaKey) return;
-    const actions = { ArrowLeft: back, ArrowRight: forward, Home: () => goTo(tree.root, { animate: false }), End: () => goTo(tree.end(), { animate: false }) };
+    const actions = { ArrowLeft: back, ArrowRight: forward, Home: () => goTo(tree.root, { animate: false }), End: () => goTo(online ? online.tip : tree.end(), { animate: false }) };
     if (actions[e.key]) { e.preventDefault(); actions[e.key](); }
   });
 
@@ -971,7 +1187,10 @@ function initControls() {
 async function start() {
   initControls();
   initVoice();
+  initOnline();
   onPositionChanged();
+  const code = parseCode(params.get('room'));
+  if (code) joinOnline(code);
   engine = await createEngine(params.get('engine') === 'builtin' ? 'builtin' : 'stockfish');
   $('engine-name').textContent = `Engine: ${engine.name}`;
   if (engine.name.startsWith('Stockfish')) {
