@@ -1011,6 +1011,7 @@ function startOnline(room) {
   selected = null;
   hidePromotion();
   setRoomParam(room.code);
+  $('mode').value = 'online';
   room.onError = onlineError;
   if (!room.joined) room.onJoined(() => { online.joined = true; onPositionChanged(); });
   room.onMoves(onOnlineMoves);
@@ -1052,20 +1053,27 @@ function leaveOnline() {
   online = null;
   setRoomParam(null);
   $('online-error').textContent = '';
+  // Back to the last game against the computer.
+  $('mode').value = settings.mode;
   newGame();
   updateOpeningCard();
   updateEvalBar();
 }
 
+// "Play a friend online" in the Game menu swaps the practice picker and New
+// game button for the room setup; in a room, the room's details and buttons.
 function renderOnline() {
-  $('online-setup').hidden = !!online;
+  const friend = !!online || $('mode').value === 'online';
+  $('online-setup').hidden = !friend || !!online;
   $('online-room').hidden = !online;
-  for (const id of ['mode', 'practice', 'new-game', 'load-fen']) $(id).disabled = !!online;
+  $('practice-row').hidden = friend;
+  $('new-game').hidden = friend;
+  for (const id of ['mode', 'load-fen']) $(id).disabled = !!online;
   if (!online) return;
   const over = onlineOver();
   const side = online.color === 'w' ? 'White' : 'Black';
   const lines = [`Room <b>${online.code}</b> · you play ${side}`];
-  if (!online.joined) lines.push('Send your opponent the invite link or the code. They join from this card.');
+  if (!online.joined) lines.push('Send your opponent the invite link, or the code to enter under "Play a friend online".');
   if (over) lines.push('Game over. Step back through the moves to review them.');
   else lines.push(online.aids ? 'Ratings and explanations are on for both players.' : 'Ratings and explanations are off until the game ends.');
   $('online-info').innerHTML = lines.join('<br>');
@@ -1112,9 +1120,13 @@ function newGame(fen) {
     $('status').textContent = `Invalid FEN: ${err.message}`;
     return;
   }
-  mode = $('mode').value;
-  settings.mode = mode;
-  saveSettings();
+  // The friend option only shows the room setup; the board keeps the last
+  // computer game's sides until a room starts.
+  if ($('mode').value !== 'online') {
+    mode = $('mode').value;
+    settings.mode = mode;
+    saveSettings();
+  }
   orientation = mode === 'b' ? 'b' : 'w';
   selected = null;
   hidePromotion();
@@ -1177,7 +1189,10 @@ function initControls() {
   });
   $('flip').onclick = () => { orientation = orientation === 'w' ? 'b' : 'w'; render(); updateEvalBar(); };
   $('load-fen').onclick = () => newGame($('fen').value.trim());
-  $('mode').addEventListener('change', () => newGame(game.history().length ? undefined : game.fen()));
+  $('mode').addEventListener('change', () => {
+    if ($('mode').value === 'online') { $('online-error').textContent = ''; renderOnline(); return; }
+    newGame(game.history().length ? undefined : game.fen());
+  });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { hidePromotion(); select(null); return; }
     // Arrow keys step through the moves, unless typing in a field.

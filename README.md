@@ -67,7 +67,7 @@ The computer opponent uses the same ratings. "Computer strength" 20 always plays
 
 - **Mistake preventer** in settings limits piece rings, target ratings and move hints to moves rated Mistake or Blunder. Hover an orange or red target or select its move-list row to explain it before playing. Opening guidance is hidden while enabled. When only one legal move avoids a Mistake or Blunder, an arrow in its rating colour shows it and the status line names it. It starts off each time the page loads; turn it off to restore full guidance. The individual visual toggles still apply.
 
-- **Game**: play White or Black against the computer, or "Both sides" to rate moves for whoever is to move.
+- **Game**: play White or Black against the computer, "Both sides" to rate moves for whoever is to move, or "Play a friend online" (see above).
 - **Moves and variations.** Every move is kept in a tree. The **‹ ›** carets (or the ← → keys; Home and End jump to the start and end) step through the game; each caret only appears when there's a move to step to. Playing a different move after stepping back starts a variation; the line you played stays the main line, and nothing is deleted. Forward follows the branch you were last on. The **Moves** list shows the main line with variations in parentheses; click any move to jump to it. The computer only replies at the end of a line you're playing, so you can step back and try moves for either side. **Flip** turns the board.
 - **Engine lines.** In the "Why this move" card, **See the line** inserts the engine's expected continuation of the selected move as a variation and steps into it; **See Nc6 line** does the same for the engine's preferred move. After a move that wasn't best, the review card offers **See why Nc6 was better**, which inserts the engine's line from the position before your move. Engine lines are shown in italics with a purple bar and never replace the main line; playing one of their moves yourself makes it a real move.
 - **Typed and spoken moves.** Type a move in the box under the game buttons and press Enter, or tap the mic and say it: "e4", "pawn to e5", "d7 to d5", "Nf3", "knight takes f6", "bishop takes knight", "right knight to c3", "queen's rook to d1", "castle kingside", "e8 queen". Left and right are as you see the board, so they swap when it's flipped; king's and queen's side don't. Common mishearings ("night", "see", "for") and NATO letters ("echo four") are understood. If a phrase fits more than one move you pick from buttons. The mic uses the browser's speech recognition (Chrome, Edge, Safari; not Firefox), and takes the first of its guesses that names a legal move. Chrome sends the audio to Google to recognize it. Parsing is in `web/js/voice.js`.
@@ -76,13 +76,13 @@ The computer opponent uses the same ratings. "Computer strength" 20 always plays
 
 ## Play a friend online
 
-The **Play a friend online** card sets up a game between two people.
+Choose **Play a friend online** in the **Game** menu. The practice picker and New game button give way to the room setup, in the same box.
 
-- **Create game**: pick your side (White, Black or random) and whether ratings and explanations are allowed during the game. You get a 6-character room code and a **Copy invite link** button. The link opens the site and joins the game; the other player can also type the code into the card and press **Join**.
+- **Create game**: pick your side (White, Black or random) and whether ratings and explanations are allowed during the game. You get a 6-character room code and a **Copy invite link** button. The link opens the site and joins the game; the other player can also choose **Play a friend online** and enter the code beside **Join**.
 - Moves sync through Firebase Realtime Database. Your opponent's move appears on your board as soon as it's played.
 - **Ratings and explanations.** If the host didn't allow them, both players see a plain board while the game is live: no rings, target ratings, arrows, explanations, opening card or eval bar, and the engine doesn't run. They return for both players once the game ends, so you can review it. If the host allowed them, each player's own settings menu applies as usual.
 - **Stepping back** works as in a normal game: you can step back and try moves as a local variation, and End returns to the live position. Only moves played at the live position are sent.
-- **Resign** ends the game for both players. **Leave** returns to playing the computer.
+- **Resign** ends the game for both players. **Leave** returns to the last game type you played against the computer.
 - **Reloading** the page rejoins the game as the same side, since the room code stays in the address bar. The seat is remembered per browser tab, so opening the invite link in a second tab joins as the opponent (handy for trying it out alone). A room takes two players; a third person who opens the link is turned away.
 - No undo, clocks or draw offers.
 
