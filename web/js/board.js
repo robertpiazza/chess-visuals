@@ -45,7 +45,9 @@ export class BoardView {
     container.appendChild(this.svg);
     this.layers = {};
     // 'overlay' holds score pills, stars and badges so arrows never cover them.
-    for (const name of ['squares', 'safety', 'marks', 'rings', 'pieces', 'safetyTop', 'dests', 'arrows', 'overlay', 'labels', 'drag']) {
+    // 'safety' sits under 'dests', so a target's score pill stays readable
+    // over the bar of a piece dragged onto it (a loss badge is in 'overlay').
+    for (const name of ['squares', 'marks', 'rings', 'pieces', 'safety', 'dests', 'arrows', 'overlay', 'labels', 'drag']) {
       this.layers[name] = el('g', { class: `layer-${name}` }, this.svg);
     }
     this.orientation = 'w';
@@ -271,32 +273,23 @@ export class BoardView {
     }
   }
 
-  // Piece safety (prototype). safety: Map square → { color, state, loss },
-  // drawn for the mover's pieces, plus enemy pieces the mover could win.
-  // style picks the look: 'border', 'bar', 'plate' or 'tint'.
-  drawSafety({ safety, safetyStyle: style, mover }) {
-    if (!safety || !style) return;
+  // Piece safety: a bar under each piece (kings excepted). safety: Map
+  // square → { color, state, loss } from safety.js. Colours are from the
+  // side at the bottom of the board: a piece of theirs that would lose
+  // material is red with the loss, an enemy piece they can win is amber with
+  // the gain. Protected pieces get a light bar, loose ones a dashed outline.
+  drawSafety({ safety, orientation }) {
+    if (!safety) return;
     for (const [sq, s] of safety) {
-      const mine = s.color === mover;
-      if (!mine && s.state !== 'loses') continue;
-      const kind = mine ? s.state : 'wins';
+      const kind = s.state === 'loses' ? (s.color === orientation ? 'loses' : 'wins')
+        : s.state === 'loose' ? 'loose' : 'protected';
       const [x, y] = this.squareOrigin(sq);
-      const cls = `safety safety-${style} safe-${kind}`;
-      if (style === 'tint') {
-        el('rect', { x, y, width: 100, height: 100, class: cls }, this.layers.safety);
-      } else if (style === 'border') {
-        el('rect', { x: x + 5, y: y + 5, width: 90, height: 90, rx: 10, class: cls }, this.layers.safety);
-      } else if (style === 'plate') {
-        el('ellipse', { cx: x + 50, cy: y + 86, rx: 32, ry: 9, class: cls }, this.layers.safety);
-      } else if (style === 'bar') {
-        el('rect', { x: x + 14, y: y + 89, width: 72, height: 7, rx: 3.5, class: cls }, this.layers.safetyTop);
-      }
-      // How much is lost (or can be won), in pawns.
+      el('rect', { x: x + 16, y: y + 89, width: 68, height: 6, rx: 3, class: `safety-bar safe-${kind}` }, this.layers.safety);
       if (s.loss > 0) {
         const g = el('g', { class: `safety-num safe-${kind}` }, this.layers.overlay);
-        const [cx, cy] = style === 'bar' || style === 'plate' ? [x + 80, y + 80] : [x + 82, y + 18];
+        const cx = x + 82, cy = y + 80;
         el('rect', { x: cx - 15, y: cy - 11, width: 30, height: 22, rx: 11 }, g);
-        el('text', { x: cx, y: cy + 1 }, g).textContent = `${mine ? '−' : '+'}${s.loss}`;
+        el('text', { x: cx, y: cy + 1 }, g).textContent = `${kind === 'loses' ? '−' : '+'}${s.loss}`;
       }
     }
   }

@@ -17,6 +17,13 @@ A browser chess trainer for standard chess. On your turn, every one of your piec
 - The side panel lists the piece's moves with SAN, class, score and win %. Hover a row to highlight the square; click a row to play it.
 - Promotion shows a picker with each choice rated.
 
+**Safety bars under pieces**
+- Every piece except the kings, on both sides, gets a short bar under it, whoever is to move. It answers: if the opponent started capturing on this square and both sides traded while it paid off, who comes out ahead?
+- Light blue: protected, or attacked but the trades come out even or better. Dashed outline: loose, nothing defends it.
+- Red with −n: a piece of the side at the bottom of the board that would lose n pawns' worth. Amber with +n: a piece of the side at the top that the bottom side can win. Flip the board to see it from the other side.
+- While you drag a piece, or hover a selected piece's target, the bars show the position after that move: which of your pieces it leaves hanging or protects, and which enemy pieces it attacks.
+- It's a static exchange count (`web/js/safety.js`): cheapest capturer first, pins and pieces lined up behind each other included, but no checks or threats elsewhere. Turn it off in settings with "Safety bars under pieces".
+
 **Moves played** are annotated with the rating they had when played (`?!`, `?`, `??`), for both you and the computer.
 
 ## Tactics and explanations
@@ -119,6 +126,7 @@ web/
     ├── board.js             # SVG board, piece rings, move markers, drag/click input
     ├── analysis.js          # win%, move classes, per-piece summaries
     ├── tactics.js           # fork/pin/skewer/discovery/trap/hanging detection
+    ├── safety.js            # static exchange count behind the safety bars
     ├── principles.js        # positional commentary
     ├── explain.js           # combines both with the engine line; forced-tactic icons
     ├── openings.js          # opening library and lookup

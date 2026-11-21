@@ -17,7 +17,7 @@ import { parseCode } from './online.js';
 const $ = id => document.getElementById(id);
 
 // ── Settings (remembered per browser) ───────────────────────────────────────
-const DEFAULTS = { mode: 'w', strength: 8, depth: 12, showRings: true, showDests: true, showExplain: true, showBook: true, mistakePreventer: false };
+const DEFAULTS = { mode: 'w', strength: 8, depth: 12, showRings: true, showDests: true, showExplain: true, showBook: true, showSafety: true, mistakePreventer: false };
 const settings = { ...DEFAULTS, ...loadSettings() };
 
 function loadSettings() {
@@ -591,10 +591,8 @@ function render() {
     arrows.unshift({ from: played.from, to: played.to, tone: rating ? `last cls-${rating.cls}` : 'last' });
   }
 
-  const safetyStyle = params.get('safety');
   board.render({
-    safety: safetyStyle ? safetyView() : null,
-    safetyStyle,
+    safety: settings.showSafety && !aidsHidden() ? safetyView() : null,
     mover: game.turn(),
     // Fastest mate in the position, so slower mates show a part-filled ring.
     fastestMate: ready ? Math.min(Infinity, ...[...analysis.ratings.values()].filter(r => r.score.mate > 0).map(r => r.score.mate)) : null,
@@ -613,8 +611,9 @@ function render() {
   });
 }
 
-// Piece safety for the board as shown, or, while a selected piece is dragged
-// or hovered over one of its targets, for the position after that move.
+// Piece safety for the board as shown, for both sides whoever is to move,
+// or, while a selected piece is dragged or hovered over one of its targets,
+// for the position after that move.
 function safetyView() {
   const { board: b } = parseFen(game.fen());
   if (selected && hoverSq && hoverSq !== selected) {
@@ -1171,7 +1170,7 @@ function initControls() {
     });
     if (id === 'depth') input.addEventListener('change', () => { if (humanToMove()) analyse(); });
   }
-  for (const [id, key] of [['mistake-preventer', 'mistakePreventer'], ['show-rings', 'showRings'], ['show-dests', 'showDests'], ['show-explain', 'showExplain'], ['show-book', 'showBook']]) {
+  for (const [id, key] of [['mistake-preventer', 'mistakePreventer'], ['show-rings', 'showRings'], ['show-dests', 'showDests'], ['show-explain', 'showExplain'], ['show-book', 'showBook'], ['show-safety', 'showSafety']]) {
     const input = $(id);
     input.checked = settings[key];
     input.addEventListener('change', () => {
