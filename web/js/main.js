@@ -57,6 +57,7 @@ const explainCache = new Map();    // fen|uci|depth → explanation
 // `tip` is the tree node of the latest move in the shared game; stepping back
 // and trying moves elsewhere stays local, like any variation.
 let online = null;
+let connecting = null;             // status text while creating or joining a room
 
 const board = new BoardView($('board-wrap'), {
   onSquareDown, onSquareUp,
@@ -68,7 +69,7 @@ const board = new BoardView($('board-wrap'), {
 // looking back at an earlier position or stepping through an engine line:
 // the computer only replies at the end of a line you're playing.
 function humanToMove() {
-  if (game.isGameOver()) return false;
+  if (connecting || game.isGameOver()) return false;
   if (online && tree.cursor === online.tip) return online.joined && !online.result && game.turn() === online.color;
   return mode === 'both' || game.turn() === mode || !!tree.main(tree.cursor) || tree.cursor.engine;
 }
@@ -367,7 +368,7 @@ function setAnalysis(fen, lines, depth, done) {
 function afterAnalysis(token, human) {
   updateStatus();
   updateEvalBar();
-  if (human || online) {
+  if (human || online || connecting) {
     render();
     renderPieceCard();
   } else {
@@ -831,6 +832,7 @@ function plyHtml(node, forceNumber) {
 
 function updateStatus() {
   const el = $('status');
+  if (connecting) { el.textContent = connecting; return; }
   if (game.isGameOver()) { el.textContent = gameOverText(); return; }
   const offGame = online && tree.cursor !== online.tip;
   if (online?.result && !offGame) { el.textContent = onlineResultText(); return; }
@@ -960,31 +962,40 @@ function setRoomParam(code) {
   history.replaceState(null, '', url);
 }
 
-async function createOnline() {
+function createOnline() {
   const choice = $('online-color').value;
   const color = choice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : choice;
-  $('online-error').textContent = '';
-  $('online-create').disabled = true;
-  try {
-    startOnline(await Room.create({ color, aids: $('online-aids').checked }));
-  } catch (err) {
-    onlineError(err);
-  } finally {
-    $('online-create').disabled = false;
-  }
+  const aids = $('online-aids').checked;
+  connectOnline('Creating game…', () => Room.create({ color, aids }));
 }
 
-async function joinOnline(code) {
+function joinOnline(code) {
+  connectOnline(`Joining game ${code}…`, () => Room.join(code), () => setRoomParam(null));
+}
+
+// While the room is being set up the board is locked and the computer
+// doesn't move, so nothing is played in the game that's about to be replaced.
+async function connectOnline(label, open, onFail) {
+  connecting = label;
+  searchToken++;
+  selected = null;
+  hidePromotion();
   $('online-error').textContent = '';
-  $('online-join').disabled = true;
+  $('online-create').disabled = $('online-join').disabled = true;
+  updateStatus();
+  render();
+  renderPieceCard();
+  let room = null;
   try {
-    startOnline(await Room.join(code));
+    room = await open();
   } catch (err) {
     onlineError(err);
-    setRoomParam(null);
-  } finally {
-    $('online-join').disabled = false;
+    onFail?.();
   }
+  connecting = null;
+  $('online-create').disabled = $('online-join').disabled = false;
+  if (room) startOnline(room);
+  else onPositionChanged();
 }
 
 function startOnline(room) {
