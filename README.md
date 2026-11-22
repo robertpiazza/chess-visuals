@@ -1,6 +1,15 @@
 # Chess Visuals
 
-A browser chess trainer for standard chess. On your turn, every one of your pieces shows a ring rating its legal moves, so you can see at a glance which pieces have good options and which have only bad ones. Select a piece and each of its target squares shows how good that move is.
+A visual chess trainer that runs in the browser. It marks up the board with what you'd want to notice before moving:
+
+- **Move ratings.** On your turn, a ring around each of your pieces rates its legal moves, so you can see which pieces have good options and which have only bad ones. Select a piece and each target square shows how good that move is.
+- **Piece safety.** A bar under every piece, yours and your opponent's, shows whether it's protected, loose, about to be lost, or there for the taking.
+- **Tactics.** Forks, pins, skewers and sacrifices are flagged where they happen.
+- **Explanations.** Every move is explained in plain language, including why the best move beats yours.
+
+You can play the computer, practice openings from a built-in library, or play a friend online.
+
+**[Play it at robertpiazza.com/chess-visuals](https://robertpiazza.com/chess-visuals/)**
 
 ## What the board shows
 
@@ -152,4 +161,4 @@ Pushing to `main` runs the tests and deploys `web/` to the `gh-pages` branch (`.
 
 ## Link previews
 
-`web/index.html` carries Open Graph and Twitter card tags, so a shared link shows a title, description and `web/og-image.png` (1200×630: a board with rated rings next to the title and main features). The tags point at `https://robertpiazza.com/chess-visuals/`; change `og:url`, `og:image`, `twitter:image` and the canonical link if the site moves.
+`web/index.html` carries Open Graph and Twitter card tags, so a shared link shows a title, description and `web/og-image.png` (1200×630: a board from the app with rated rings, safety bars and a fork badge, next to the title and main features). The tags point at `https://robertpiazza.com/chess-visuals/`; change `og:url`, `og:image`, `twitter:image` and the canonical link if the site moves.
