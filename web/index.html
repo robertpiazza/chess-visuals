@@ -8,6 +8,21 @@
   <link rel="icon" href="pieces/wN.svg" type="image/svg+xml">
   <link rel="canonical" href="https://robertpiazza.com/chess-visuals/">
 
+  <!-- Google Analytics, the same property as robertpiazza.com. Skipped on
+       local copies so development and tests aren't counted. -->
+  <script>
+    if (/(^|\.)robertpiazza\.(com|github\.io)$/.test(location.hostname)) {
+      const s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://www.googletagmanager.com/gtag/js?id=G-KWW8TRJENR';
+      document.head.appendChild(s);
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function () { dataLayer.push(arguments); };
+      gtag('js', new Date());
+      gtag('config', 'G-KWW8TRJENR');
+    }
+  </script>
+
   <!-- Link previews (Open Graph for most apps, Twitter card for X). -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Chess Visuals">
